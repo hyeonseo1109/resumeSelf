@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Copy, ExternalLink, FilePenLine, Trash2 } from "lucide-react";
+import { CreateProjectDialog } from "@/components/dashboard/create-project-dialog";
 import type { ResumeProject, SubscriptionTier } from "@/types/project";
 
 interface ProjectListProps {
@@ -7,9 +8,12 @@ interface ProjectListProps {
   tier: SubscriptionTier;
   limit: number;
   canEdit: boolean;
+  createAction: (formData: FormData) => void | Promise<void>;
 }
 
-export function ProjectList({ projects, tier, limit, canEdit }: ProjectListProps) {
+export function ProjectList({ projects, tier, limit, canEdit, createAction }: ProjectListProps) {
+  const canCreate = canEdit && projects.length < limit;
+
   return (
     <section className="grid gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -19,13 +23,14 @@ export function ProjectList({ projects, tier, limit, canEdit }: ProjectListProps
             {tier === "premium" ? "Premium" : "Free"} plan · {projects.length}/{limit} projects
           </p>
         </div>
-        <button
-          disabled={!canEdit}
-          className="rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
-        >
-          새 프로젝트
-        </button>
+        <CreateProjectDialog canCreate={canCreate} action={createAction} />
       </div>
+
+      {canEdit && !canCreate ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          현재 플랜의 프로젝트 생성 한도에 도달했습니다.
+        </p>
+      ) : null}
 
       <div className="grid gap-3 md:grid-cols-2">
         {projects.map((project) => (
