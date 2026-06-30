@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ResumeSelf
+
+Framer, Notion, Figma/PPT의 장점을 조합한 웹 기반 이력서·포트폴리오 제작 서비스입니다.
+
+사용자는 Supabase OAuth로 로그인하고 프로젝트를 생성한 뒤, Next.js App Router의 Dynamic Route(`/[slug]`)를 통해 자신만의 공개 URL을 발급받습니다.
+
+## Tech Stack
+
+- Next.js App Router
+- TypeScript
+- TailwindCSS
+- Supabase Auth, PostgreSQL, Storage
+- Zustand
+- Tiptap
+- dnd-kit
+- react-resizable
+- html2pdf.js
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+현재 개발 서버는 3001 포트로 실행할 수 있습니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run dev -- --port 3001
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment
 
-## Learn More
+`.env.example`을 기준으로 Supabase 값을 설정합니다.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+PREMIUM_EMAIL_WHITELIST=
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Supabase
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+초기 테이블과 RLS 정책은 `supabase/schema.sql`에 있습니다.
 
-## Deploy on Vercel
+현재 구현된 기반:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Supabase OAuth 클라이언트/서버 연결
+- Google/Github OAuth 버튼
+- Dashboard 프로젝트 목록 시작 화면
+- `/[slug]` 공개 URL 렌더링
+- `/editor/[projectId]` 에디터 레이아웃
+- Insert Panel, Canvas, Property Panel
+- Zustand 기반 Editor 상태
+- dnd-kit 기반 Canvas 드래그 시작점
+- 10초 Debounce Auto Save UI 상태
+- PDF Export 버튼 연결
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Implementation Order
+
+1. 프로젝트 초기 세팅
+2. Supabase 연결
+3. OAuth 로그인
+4. Dashboard
+5. Database 설계
+6. Dynamic Route(`/[slug]`)
+7. Editor UI
+8. Drag & Drop
+9. Rich Text Editor
+10. Image 기능
+11. Video 기능
+12. Navigation (Router / Scroll)
+13. Responsive
+14. Auto Save
+15. Preview
+16. PDF Export
+17. URL 공유
+18. 최적화 및 리팩토링
+

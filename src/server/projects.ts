@@ -75,8 +75,11 @@ export async function getProjectBySlug(slug: string): Promise<ResumeProject | nu
   };
 }
 
-export async function getProjectById(projectId: string): Promise<ResumeProject | null> {
-  const projects = await listProjects();
-  return projects.find((project) => project.id === projectId) ?? starterResumeProject;
-}
+export async function getProjectById(projectId: string, ownerId: string): Promise<ResumeProject | null> {
+  if (projectId === starterResumeProject.id && ownerId) {
+    return starterResumeProject;
+  }
 
+  const projects = await listProjects(ownerId);
+  return projects.find((project) => project.id === projectId) ?? null;
+}

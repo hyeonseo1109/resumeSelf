@@ -13,11 +13,10 @@ export function TopNav() {
             Dashboard
           </Link>
           <div className="hidden sm:block">
-            <OAuthButtons className="[&_button]:h-9 [&_button]:px-3 [&_button]:text-xs [&_button:first-child]:hidden [&_p]:hidden" />
+            <OAuthButtons className="[&_button]:h-9 [&_button]:px-3 [&_button]:text-xs [&_p]:hidden" />
           </div>
         </nav>
       </div>
     </header>
   );
 }
-
