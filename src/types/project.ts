@@ -9,6 +9,7 @@ export type ComponentType =
   | "image"
   | "video"
   | "button"
+  | "link"
   | "divider"
   | "spacer"
   | "section"
@@ -61,4 +62,3 @@ export interface ResumeProject {
   updatedAt: string;
   publishedAt: string | null;
 }
-

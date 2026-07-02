@@ -36,27 +36,62 @@ create table if not exists public.fonts (
   created_at timestamptz not null default now()
 );
 
+insert into storage.buckets (id, name, public)
+values ('project-media', 'project-media', true)
+on conflict (id) do update set public = true;
+
 alter table public.users enable row level security;
 alter table public.projects enable row level security;
 alter table public.media enable row level security;
 alter table public.fonts enable row level security;
 
+drop policy if exists "Users can read own profile" on public.users;
 create policy "Users can read own profile" on public.users
   for select using (auth.uid() = id);
 
+drop policy if exists "Users can create own profile" on public.users;
 create policy "Users can create own profile" on public.users
   for insert with check (auth.uid() = id);
 
+drop policy if exists "Users can update own profile" on public.users;
 create policy "Users can update own profile" on public.users
   for update using (auth.uid() = id) with check (auth.uid() = id);
 
+drop policy if exists "Users can manage own projects" on public.projects;
 create policy "Users can manage own projects" on public.projects
   for all using (auth.uid() = owner_id) with check (auth.uid() = owner_id);
 
+drop policy if exists "Published projects are readable" on public.projects;
 create policy "Published projects are readable" on public.projects
   for select using (published_at is not null or auth.uid() = owner_id);
 
+drop policy if exists "Users can manage own media" on public.media;
 create policy "Users can manage own media" on public.media
   for all using (
     exists (select 1 from public.projects where projects.id = media.project_id and projects.owner_id = auth.uid())
+  );
+
+drop policy if exists "Project media is publicly readable" on storage.objects;
+create policy "Project media is publicly readable" on storage.objects
+  for select using (bucket_id = 'project-media');
+
+drop policy if exists "Users can upload project media" on storage.objects;
+create policy "Users can upload project media" on storage.objects
+  for insert with check (
+    bucket_id = 'project-media'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "Users can update own project media" on storage.objects;
+create policy "Users can update own project media" on storage.objects
+  for update using (
+    bucket_id = 'project-media'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "Users can delete own project media" on storage.objects;
+create policy "Users can delete own project media" on storage.objects
+  for delete using (
+    bucket_id = 'project-media'
+    and auth.uid()::text = (storage.foldername(name))[1]
   );

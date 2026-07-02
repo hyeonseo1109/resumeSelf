@@ -7,7 +7,7 @@ export const starterResumeProject: ResumeProject = {
   slug: "eunseo",
   mode: "template",
   navigationMode: "scroll",
-  updatedAt: new Date().toISOString(),
+  updatedAt: "2026-01-01T00:00:00.000Z",
   publishedAt: null,
   navigation: [
     { id: "nav-resume", label: "Resume", target: "resume", order: 0 },
@@ -52,4 +52,3 @@ export const starterResumeProject: ResumeProject = {
     },
   ],
 };
-
