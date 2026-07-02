@@ -27,6 +27,7 @@ export function EditorShell({ project }: EditorShellProps) {
   const addNavigationPage = useStore(store, (state) => state.addNavigationPage);
   const updateNavigationItem = useStore(store, (state) => state.updateNavigationItem);
   const removeNavigationPage = useStore(store, (state) => state.removeNavigationPage);
+  const setHomePage = useStore(store, (state) => state.setHomePage);
   const setNavigationMode = useStore(store, (state) => state.setNavigationMode);
   const selectedComponentId = useStore(store, (state) => state.selectedComponentId);
   const selectComponent = useStore(store, (state) => state.selectComponent);
@@ -37,13 +38,39 @@ export function EditorShell({ project }: EditorShellProps) {
   const mode = useStore(store, (state) => state.mode);
   const setMode = useStore(store, (state) => state.setMode);
   const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "error">("idle");
+  const [activeTocTarget, setActiveTocTarget] = useState(editorProject.navigation[0]?.target ?? "");
+  const scrollAreaRef = useRef<HTMLElement | null>(null);
   const projectRef = useRef(editorProject);
   const saveStatusRef = useRef(saveStatus);
 
   const activePage = editorProject.pages.find((page) => page.id === activePageId) ?? editorProject.pages[0];
-  const components = activePage?.sections[0]?.components ?? [];
+  const isScrollMode = editorProject.navigationMode === "scroll";
+  const allComponents = editorProject.pages.flatMap((page) => page.sections[0]?.components ?? []);
+  const activePageComponents = activePage?.sections[0]?.components ?? [];
+  const pageLayouts = useMemo(() => {
+    return editorProject.pages.reduce<Array<{ page: ResumeProject["pages"][number]; components: ResumeComponent[]; offset: number; height: number }>>((layouts, page) => {
+      const pageComponents = (page.sections[0]?.components ?? []).filter(
+        (component) => !(component.type === "section" && component.props.sectionFrame === true),
+      );
+      const height = Math.max(240, ...pageComponents.map((component) => component.y + component.height + 72));
+      const offset = layouts.reduce((total, layout) => total + layout.height + 16, 0);
+      const layout = { page, components: pageComponents, offset, height };
+      return [...layouts, layout];
+    }, []);
+  }, [editorProject.pages]);
+  const renderItems = isScrollMode
+    ? pageLayouts.flatMap((layout) =>
+        layout.components.map((component) => ({
+          component,
+          displayTop: component.y + layout.offset + 44,
+        })),
+      )
+    : activePageComponents.map((component) => ({ component, displayTop: component.y }));
+  const components = isScrollMode ? allComponents : activePageComponents;
   const selectedComponent = components.find((component) => component.id === selectedComponentId) ?? null;
-  const canvasHeight = Math.max(1120, ...components.map((component) => component.y + component.height + 160));
+  const canvasHeight = isScrollMode
+    ? Math.max(1120, pageLayouts.at(-1) ? pageLayouts.at(-1)!.offset + pageLayouts.at(-1)!.height : 1120)
+    : Math.max(1120, ...activePageComponents.map((component) => component.y + component.height + 160));
 
   useEffect(() => {
     projectRef.current = editorProject;
@@ -52,6 +79,42 @@ export function EditorShell({ project }: EditorShellProps) {
   useEffect(() => {
     saveStatusRef.current = saveStatus;
   }, [saveStatus]);
+
+  useEffect(() => {
+    if (!isScrollMode) {
+      return;
+    }
+
+    const scrollElement = scrollAreaRef.current;
+    if (!scrollElement) {
+      return;
+    }
+    const scrollRoot: HTMLElement = scrollElement;
+
+    function updateActiveSection() {
+      let currentTarget = editorProject.navigation[0]?.target ?? "";
+
+      for (const item of editorProject.navigation) {
+        const anchor = document.getElementById(`editor-section-${item.target}`);
+        if (!anchor) {
+          continue;
+        }
+
+        const scrollAreaTop = scrollRoot.getBoundingClientRect().top;
+        const anchorTop = anchor.getBoundingClientRect().top - scrollAreaTop;
+
+        if (anchorTop <= 140) {
+          currentTarget = item.target;
+        }
+      }
+
+      setActiveTocTarget(currentTarget);
+    }
+
+    updateActiveSection();
+    scrollRoot.addEventListener("scroll", updateActiveSection);
+    return () => scrollRoot.removeEventListener("scroll", updateActiveSection);
+  }, [editorProject.navigation, isScrollMode]);
 
   const saveProject = useCallback(async () => {
     if (saveStatusRef.current !== "dirty" && saveStatusRef.current !== "error") {
@@ -135,6 +198,26 @@ export function EditorShell({ project }: EditorShellProps) {
     });
   }
 
+  function handleHeaderNavigation(target: string) {
+    if (editorProject.navigationMode === "scroll") {
+      const nextPage = editorProject.pages.find((page) => page.slug === target);
+      if (nextPage) {
+        setActivePage(nextPage.id);
+      }
+
+      const anchor = document.getElementById(`editor-section-${target}`);
+      anchor?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveTocTarget(target);
+      return;
+    }
+
+    const nextPage = editorProject.pages.find((page) => page.slug === target);
+
+    if (nextPage) {
+      setActivePage(nextPage.id);
+    }
+  }
+
   async function exportPdf() {
     const element = document.querySelector("#resume-canvas");
     if (!element) {
@@ -209,11 +292,17 @@ export function EditorShell({ project }: EditorShellProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <PageSwitcher
-            pages={editorProject.pages}
-            activePageId={activePage?.id}
-            onSelect={setActivePage}
-          />
+          {!isScrollMode ? (
+            <RouteSwitcher
+              project={editorProject}
+              activePageId={activePage?.id}
+              onSelectPage={setActivePage}
+              onAddNavigationPage={addNavigationPage}
+              onUpdateNavigationItem={updateNavigationItem}
+              onRemoveNavigationPage={removeNavigationPage}
+              onSetHomePage={setHomePage}
+            />
+          ) : null}
           <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600">
             <Save className="size-3.5" />
             {saveStatus === "dirty"
@@ -286,18 +375,53 @@ export function EditorShell({ project }: EditorShellProps) {
           </aside>
         ) : null}
 
-        <main className="overflow-auto p-6">
+        <main ref={scrollAreaRef} className="overflow-auto p-6">
           <DndContext onDragEnd={handleDragEnd}>
             <div
               id="resume-canvas"
               className="relative mx-auto w-full max-w-[840px] bg-white shadow-sm ring-1 ring-zinc-200"
               style={{ minHeight: canvasHeight }}
             >
-              <SiteHeader project={editorProject} mode={mode} activeTarget={activePage?.slug} />
-              {components.map((component) => (
+              <SiteHeader
+                project={editorProject}
+                mode={mode}
+                activeTarget={activePage?.slug}
+                onNavigate={handleHeaderNavigation}
+                onTitleClick={() => {
+                  if (isScrollMode) {
+                    scrollAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                    return;
+                  }
+
+                  const homePage = editorProject.pages[0];
+                  if (homePage) {
+                    setActivePage(homePage.id);
+                  }
+                }}
+              />
+              {isScrollMode
+                ? pageLayouts.map((layout) => {
+                    const navItem = editorProject.navigation.find((item) => item.target === layout.page.slug);
+                    const target = navItem?.target ?? layout.page.slug;
+                    const label = navItem?.label ?? layout.page.title;
+
+                    return (
+                      <div
+                        key={layout.page.id}
+                        id={`editor-section-${target}`}
+                        className="absolute left-0 w-full scroll-mt-6 px-12 pt-4"
+                        style={{ top: layout.offset + 12, height: 44 }}
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">{label}</p>
+                      </div>
+                    );
+                  })
+                : null}
+              {renderItems.map(({ component, displayTop }) => (
                 <CanvasComponent
                   key={component.id}
                   component={component}
+                  displayTop={displayTop}
                   preview={mode === "preview"}
                   isSelected={selectedComponentId === component.id}
                   onSelect={() => selectComponent(component.id)}
@@ -317,49 +441,119 @@ export function EditorShell({ project }: EditorShellProps) {
             onDelete={removeComponent}
             onUpload={uploadMedia}
             project={editorProject}
-            activePageId={activePage?.id ?? ""}
-            onSelectPage={setActivePage}
-            onAddNavigationPage={addNavigationPage}
-            onUpdateNavigationItem={updateNavigationItem}
-            onRemoveNavigationPage={removeNavigationPage}
             onSetNavigationMode={setNavigationMode}
           />
         ) : null}
       </div>
-      {editorProject.navigationMode === "scroll" && mode === "edit" ? (
-        <ScrollToc navigation={editorProject.navigation} />
+      {editorProject.navigationMode === "scroll" ? (
+        <ScrollToc
+          navigation={editorProject.navigation}
+          activeTarget={
+            editorProject.navigation.some((item) => item.target === activeTocTarget)
+              ? activeTocTarget
+              : editorProject.navigation[0]?.target ?? ""
+          }
+          onSelect={(target) => handleHeaderNavigation(target)}
+        />
       ) : null}
     </div>
   );
 }
 
-function PageSwitcher({
-  pages,
+function RouteSwitcher({
+  project,
   activePageId,
-  onSelect,
+  onSelectPage,
+  onAddNavigationPage,
+  onUpdateNavigationItem,
+  onRemoveNavigationPage,
+  onSetHomePage,
 }: {
-  pages: ResumeProject["pages"];
+  project: ResumeProject;
   activePageId?: string;
-  onSelect: (id: string) => void;
+  onSelectPage: (id: string) => void;
+  onAddNavigationPage: () => void;
+  onUpdateNavigationItem: (id: string, patch: { label?: string; target?: string }) => void;
+  onRemoveNavigationPage: (id: string) => void;
+  onSetHomePage: (id: string) => void;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const activePage = project.pages.find((page) => page.id === activePageId) ?? project.pages[0];
+
   return (
     <div className="relative">
-      <label className="sr-only" htmlFor="page-switcher">
-        Page
-      </label>
-      <select
-        id="page-switcher"
-        value={activePageId}
-        onChange={(event) => onSelect(event.target.value)}
-        className="h-9 appearance-none rounded-md border border-zinc-200 bg-white px-3 pr-8 text-sm"
+      <button
+        type="button"
+        onClick={() => setIsOpen((value) => !value)}
+        className="inline-flex h-9 min-w-36 items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-3 text-sm"
       >
-        {pages.map((page) => (
-          <option key={page.id} value={page.id}>
-            {page.title}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
+        {activePage?.title ?? "Page"}
+        <ChevronDown className="size-4 text-zinc-400" />
+      </button>
+      {isOpen ? (
+        <div className="absolute right-0 top-11 z-50 w-80 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg">
+          <div className="grid gap-2">
+            {project.navigation.map((item, index) => {
+              const linkedPage = project.pages.find((page) => page.slug === item.target);
+              const isHome = index === 0;
+
+              return (
+                <div key={item.id} className="grid gap-2 rounded-md bg-zinc-50 p-2">
+                  <div className="flex items-center gap-1">
+                    <input
+                      value={item.label}
+                      onChange={(event) => onUpdateNavigationItem(item.id, { label: event.target.value })}
+                      className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => linkedPage && onSelectPage(linkedPage.id)}
+                      className={cn(
+                        "h-8 rounded border border-zinc-200 px-2 text-xs",
+                        linkedPage?.id === activePageId && "bg-zinc-950 text-white",
+                      )}
+                    >
+                      편집
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveNavigationPage(item.id)}
+                      className="inline-flex size-8 items-center justify-center rounded border border-zinc-200 text-zinc-400 hover:text-red-600"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <input
+                      value={item.target}
+                      onChange={(event) => onUpdateNavigationItem(item.id, { target: normalizeAnchor(event.target.value) })}
+                      className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs text-zinc-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onSetHomePage(item.id)}
+                      className={cn(
+                        "h-8 rounded border border-zinc-200 px-2 text-xs",
+                        isHome ? "bg-emerald-50 text-emerald-700" : "text-zinc-500",
+                      )}
+                    >
+                      {isHome ? "대표" : "대표 지정"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={onAddNavigationPage}
+            className="mt-3 flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-zinc-300 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
+          >
+            <Plus className="size-4" />
+            라우트 추가
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -368,22 +562,32 @@ function SiteHeader({
   project,
   mode,
   activeTarget,
+  onNavigate,
+  onTitleClick,
 }: {
   project: ResumeProject;
   mode: "edit" | "preview";
   activeTarget?: string;
+  onNavigate: (target: string) => void;
+  onTitleClick: () => void;
 }) {
   return (
     <header className="flex min-h-16 items-center justify-between border-b border-zinc-100 px-8">
-      <strong className="text-sm">{project.title}</strong>
+      <button type="button" onClick={onTitleClick} className="text-sm font-semibold text-zinc-950 hover:text-emerald-700">
+        {project.title}
+      </button>
+      {project.navigationMode === "scroll" ? (
+        <span className="text-xs font-medium text-zinc-400">Scroll Mode</span>
+      ) : (
       <nav className="flex flex-wrap items-center justify-end gap-2">
         {project.navigation.map((item) => (
           <a
             key={item.id}
             href={project.navigationMode === "scroll" ? `#${item.target}` : `/${project.slug}/${item.target}`}
             onClick={(event) => {
-              if (mode === "edit") {
+              if (mode === "edit" || mode === "preview") {
                 event.preventDefault();
+                onNavigate(item.target);
               }
             }}
             className={cn(
@@ -395,12 +599,14 @@ function SiteHeader({
           </a>
         ))}
       </nav>
+      )}
     </header>
   );
 }
 
 function CanvasComponent({
   component,
+  displayTop,
   preview,
   isSelected,
   onSelect,
@@ -408,6 +614,7 @@ function CanvasComponent({
   onResize,
 }: {
   component: ResumeComponent;
+  displayTop: number;
   preview: boolean;
   isSelected: boolean;
   onSelect: () => void;
@@ -423,7 +630,7 @@ function CanvasComponent({
     width: component.width,
     height: component.height,
     left: component.x,
-    top: component.y,
+    top: displayTop,
     transform: CSS.Translate.toString(transform),
     zIndex: component.type === "section" || component.type === "container" ? 0 : 5,
   };
@@ -561,11 +768,6 @@ function PropertyPanel({
   onDelete,
   onUpload,
   project,
-  activePageId,
-  onSelectPage,
-  onAddNavigationPage,
-  onUpdateNavigationItem,
-  onRemoveNavigationPage,
   onSetNavigationMode,
 }: {
   components: ResumeComponent[];
@@ -574,11 +776,6 @@ function PropertyPanel({
   onDelete: (id: string) => void;
   onUpload: (id: string, file: File, mediaType: "image" | "video") => Promise<void>;
   project: ResumeProject;
-  activePageId: string;
-  onSelectPage: (id: string) => void;
-  onAddNavigationPage: () => void;
-  onUpdateNavigationItem: (id: string, patch: { label?: string; target?: string }) => void;
-  onRemoveNavigationPage: (id: string) => void;
   onSetNavigationMode: (mode: ResumeProject["navigationMode"]) => void;
 }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -616,56 +813,6 @@ function PropertyPanel({
             <option value="router">Router</option>
           </select>
         </label>
-        <div className="grid gap-2 rounded-md border border-zinc-200 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium text-zinc-700">Routing Buttons</span>
-            <button
-              type="button"
-              onClick={onAddNavigationPage}
-              className="inline-flex size-8 items-center justify-center rounded-md border border-zinc-200 hover:bg-zinc-50"
-            >
-              <Plus className="size-4" />
-            </button>
-          </div>
-          <div className="grid gap-2">
-            {project.navigation.map((item) => {
-              const linkedPage = project.pages.find((page) => page.slug === item.target);
-              return (
-                <div key={item.id} className="grid gap-1 rounded-md bg-zinc-50 p-2">
-                  <div className="flex items-center gap-1">
-                    <input
-                      value={item.label}
-                      onChange={(event) => onUpdateNavigationItem(item.id, { label: event.target.value })}
-                      className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => linkedPage && onSelectPage(linkedPage.id)}
-                      className={cn(
-                        "h-8 rounded border border-zinc-200 px-2 text-xs",
-                        linkedPage?.id === activePageId && "bg-zinc-950 text-white",
-                      )}
-                    >
-                      편집
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveNavigationPage(item.id)}
-                      className="inline-flex size-8 items-center justify-center rounded border border-zinc-200 text-zinc-400 hover:text-red-600"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                  <input
-                    value={item.target}
-                    onChange={(event) => onUpdateNavigationItem(item.id, { target: normalizeAnchor(event.target.value) })}
-                    className="h-8 rounded border border-zinc-200 px-2 text-xs text-zinc-500"
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
         <label className="grid gap-1">
           <span className="text-zinc-500">Canvas Components</span>
           <input readOnly value={`${components.length} items`} className="h-9 rounded-md border border-zinc-200 px-2" />
@@ -859,24 +1006,36 @@ function NumberField({
   );
 }
 
-function ScrollToc({ navigation }: { navigation: ResumeProject["navigation"] }) {
+function ScrollToc({
+  navigation,
+  activeTarget,
+  onSelect,
+}: {
+  navigation: ResumeProject["navigation"];
+  activeTarget: string;
+  onSelect: (target: string) => void;
+}) {
   return (
-    <aside className="fixed right-4 top-24 z-40 hidden w-40 rounded-lg border border-zinc-200 bg-white/95 p-2 shadow-sm lg:block">
+    <aside className="fixed left-[calc(50%+450px)] top-1/2 z-40 hidden w-44 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white/95 p-2 shadow-sm lg:block">
       <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">Contents</p>
       <div className="grid gap-1">
-        {navigation.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => {
-              const target = document.getElementById(item.target);
-              target?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-            className="rounded-md px-2 py-1.5 text-left text-sm text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950"
-          >
-            {item.label}
-          </button>
-        ))}
+        {navigation.map((item) => {
+          const isActive = activeTarget === item.target;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSelect(item.target)}
+              className={cn(
+                "rounded-md px-2 py-1.5 text-left transition hover:bg-zinc-100 hover:text-base hover:font-semibold hover:text-zinc-950",
+                isActive ? "text-base font-semibold text-zinc-950" : "text-xs font-medium text-zinc-400",
+              )}
+            >
+              {item.label}
+            </button>
+          );
+        })}
       </div>
     </aside>
   );

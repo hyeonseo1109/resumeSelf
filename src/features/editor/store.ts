@@ -17,6 +17,7 @@ interface EditorState {
   addNavigationPage: () => void;
   updateNavigationItem: (id: string, patch: { label?: string; target?: string }) => void;
   removeNavigationPage: (id: string) => void;
+  setHomePage: (id: string) => void;
   setNavigationMode: (mode: ResumeProject["navigationMode"]) => void;
   setMode: (mode: "edit" | "preview") => void;
   markSaving: () => void;
@@ -89,21 +90,46 @@ export function createEditorStore(initialProject: ResumeProject) {
         };
       }),
     updateComponent: (id, patch) =>
-      set((state) => ({
-        saveStatus: "dirty",
-        project: {
-          ...state.project,
-          pages: state.project.pages.map((page) => ({
-            ...page,
-            sections: page.sections.map((section) => ({
-              ...section,
-              components: section.components.map((component) =>
-                component.id === id ? { ...component, ...patch } : component,
-              ),
+      set((state) => {
+        const sourceComponent = state.project.pages
+          .flatMap((page) => page.sections)
+          .flatMap((section) => section.components)
+          .find((component) => component.id === id);
+        const deltaX = typeof patch.x === "number" && sourceComponent ? patch.x - sourceComponent.x : 0;
+        const deltaY = typeof patch.y === "number" && sourceComponent ? patch.y - sourceComponent.y : 0;
+        const shouldMoveChildren = sourceComponent?.type === "section" && (deltaX !== 0 || deltaY !== 0);
+
+        return {
+          saveStatus: "dirty",
+          project: {
+            ...state.project,
+            pages: state.project.pages.map((page) => ({
+              ...page,
+              sections: page.sections.map((section) => ({
+                ...section,
+                components: section.components.map((component) => {
+                  if (component.id === id) {
+                    return { ...component, ...patch };
+                  }
+
+                  if (
+                    shouldMoveChildren &&
+                    sourceComponent &&
+                    component.x >= sourceComponent.x &&
+                    component.y >= sourceComponent.y &&
+                    component.x + component.width <= sourceComponent.x + sourceComponent.width &&
+                    component.y + component.height <= sourceComponent.y + sourceComponent.height
+                  ) {
+                    return { ...component, x: component.x + deltaX, y: component.y + deltaY };
+                  }
+
+                  return component;
+                }),
+              })),
             })),
-          })),
-        },
-      })),
+          },
+        };
+      }),
     removeComponent: (id) =>
       set((state) => ({
         saveStatus: "dirty",
@@ -198,10 +224,89 @@ export function createEditorStore(initialProject: ResumeProject) {
           },
         };
       }),
+    setHomePage: (id) =>
+      set((state) => {
+        const item = state.project.navigation.find((nav) => nav.id === id);
+        if (!item) {
+          return state;
+        }
+
+        const page = state.project.pages.find((candidate) => candidate.slug === item.target);
+        if (!page) {
+          return state;
+        }
+
+        return {
+          saveStatus: "dirty",
+          activePageId: page.id,
+          project: {
+            ...state.project,
+            navigation: [
+              item,
+              ...state.project.navigation.filter((nav) => nav.id !== id),
+            ].map((nav, order) => ({ ...nav, order })),
+            pages: [
+              page,
+              ...state.project.pages.filter((candidate) => candidate.id !== page.id),
+            ].map((candidate, order) => ({ ...candidate, order })),
+          },
+        };
+      }),
     setNavigationMode: (navigationMode) =>
-      set((state) => ({
-        saveStatus: "dirty",
-        project: { ...state.project, navigationMode },
-      })),
+      set((state) => {
+        if (state.project.navigationMode === navigationMode) {
+          return state;
+        }
+
+        const pages = state.project.pages.map((page) => {
+          const navigationItem = state.project.navigation.find((item) => item.target === page.slug);
+          const sectionLabel = navigationItem?.label ?? page.title;
+          const firstSection = page.sections[0] ?? {
+            id: crypto.randomUUID(),
+            title: sectionLabel,
+            order: 0,
+            components: [],
+          };
+          const hasSectionFrame = firstSection.components.some(
+            (component) => component.type === "section" && component.props.sectionFrame === true,
+          );
+
+          if (navigationMode !== "scroll") {
+            const normalizedComponents = firstSection.components
+              .filter((component) => !(component.type === "section" && component.props.sectionFrame === true))
+              .map((component) =>
+                hasSectionFrame ? { ...component, y: Math.max(0, component.y - 72) } : component,
+              );
+
+            return {
+              ...page,
+              title: sectionLabel,
+              sections: [{ ...firstSection, title: sectionLabel, components: normalizedComponents }, ...page.sections.slice(1)],
+            };
+          }
+
+          return {
+            ...page,
+            title: sectionLabel,
+            sections: [
+              {
+                ...firstSection,
+                title: sectionLabel,
+                components: firstSection.components.filter(
+                  (component) => !(component.type === "section" && component.props.sectionFrame === true),
+                ),
+              },
+              ...page.sections.slice(1),
+            ],
+          };
+        });
+
+        return {
+          saveStatus: "dirty",
+          activePageId: pages[0]?.id ?? state.activePageId,
+          selectedComponentId: null,
+          project: { ...state.project, navigationMode, pages },
+        };
+      }),
   }));
 }

@@ -8,44 +8,73 @@ export function PublicProjectRenderer({
   project: ResumeProject;
   page: ResumePage;
 }) {
-  const components = page.sections[0]?.components ?? [];
-  const canvasHeight = Math.max(860, ...components.map((component) => component.y + component.height + 160));
+  const isScrollMode = project.navigationMode === "scroll";
+  const pageLayouts = getPageLayouts(isScrollMode ? project.pages : [page]);
+  const components = pageLayouts.flatMap((layout) =>
+    layout.components.map((component) => ({
+      component,
+      displayTop: component.y + layout.offset + (isScrollMode ? 44 : 0),
+    })),
+  );
+  const canvasHeight = Math.max(860, pageLayouts.at(-1) ? pageLayouts.at(-1)!.offset + pageLayouts.at(-1)!.height : 860);
 
   return (
     <main className="min-h-screen bg-white text-zinc-950">
       <header className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4">
-        <strong>{project.title}</strong>
-        <nav className="flex flex-wrap justify-end gap-2">
+        <a href={isScrollMode ? "#" : `/${project.slug}`} className="font-semibold hover:text-emerald-700">
+          {project.title}
+        </a>
+        {isScrollMode ? (
+          <span className="text-xs font-medium text-zinc-400">Contents</span>
+        ) : (
+          <nav className="flex flex-wrap justify-end gap-2">
           {project.navigation.map((item) => (
             <a
               key={item.id}
-              href={project.navigationMode === "scroll" ? `#${item.target}` : `/${project.slug}/${item.target}`}
+              href={`/${project.slug}/${item.target}`}
               className="rounded-md px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
             >
               {item.label}
             </a>
           ))}
         </nav>
+        )}
       </header>
       <section className="relative mx-auto w-full max-w-5xl px-4" style={{ minHeight: canvasHeight }}>
-        {project.navigationMode === "scroll"
-          ? project.navigation.map((item) => <span key={item.id} id={item.target} className="absolute left-0 top-0" />)
+        {isScrollMode
+          ? pageLayouts.map((layout) => {
+              const navItem = project.navigation.find((item) => item.target === layout.page.slug);
+              const target = navItem?.target ?? layout.page.slug;
+              const label = navItem?.label ?? layout.page.title;
+
+              return (
+                <div
+                  key={layout.page.id}
+                  id={target}
+                  className="absolute left-0 w-full scroll-mt-6 px-12 pt-4"
+                  style={{ top: layout.offset + 12, height: 44 }}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">{label}</p>
+                </div>
+              );
+            })
           : null}
-        {components.map((component) => (
-          <PublicComponent key={component.id} component={component} />
+        {components.map(({ component, displayTop }) => (
+          <PublicComponent key={component.id} component={component} displayTop={displayTop} />
         ))}
       </section>
+      {isScrollMode ? <PublicToc navigation={project.navigation} /> : null}
     </main>
   );
 }
 
-function PublicComponent({ component }: { component: ResumeComponent }) {
+function PublicComponent({ component, displayTop }: { component: ResumeComponent; displayTop: number }) {
   return (
     <div
       className="absolute rounded-md"
       style={{
         left: component.x,
-        top: component.y,
+        top: displayTop,
         width: component.width,
         height: component.height,
       }}
@@ -108,6 +137,39 @@ function PublicComponent({ component }: { component: ResumeComponent }) {
   );
 }
 
+function PublicToc({ navigation }: { navigation: ResumeProject["navigation"] }) {
+  return (
+    <aside className="fixed left-[calc(50%+450px)] top-1/2 z-40 hidden w-44 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white/95 p-2 shadow-sm lg:block">
+      <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">Contents</p>
+      <div className="grid gap-1">
+        {navigation.map((item) => (
+          <a
+            key={item.id}
+            href={`#${item.target}`}
+            className="rounded-md px-2 py-1.5 text-left text-xs font-medium text-zinc-400 transition hover:bg-zinc-100 hover:text-base hover:font-semibold hover:text-zinc-950"
+          >
+            {item.label}
+          </a>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function getPageLayouts(pages: ResumePage[]) {
+  let offset = 0;
+
+  return pages.map((page) => {
+    const components = (page.sections[0]?.components ?? []).filter(
+      (component) => !(component.type === "section" && component.props.sectionFrame === true),
+    );
+    const height = Math.max(240, ...components.map((component) => component.y + component.height + 72));
+    const layout = { page, components, offset, height };
+    offset += height + 16;
+    return layout;
+  });
+}
+
 function normalizeAnchor(value: string) {
   return value
     .trim()
@@ -116,4 +178,3 @@ function normalizeAnchor(value: string) {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 }
-
