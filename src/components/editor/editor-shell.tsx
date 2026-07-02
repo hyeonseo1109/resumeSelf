@@ -2,7 +2,19 @@
 
 import { DndContext, type DragEndEvent, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, Download, Eye, LayoutDashboard, Link2, Pencil, Plus, Save, Trash2, Upload, X } from "lucide-react";
+import {
+  ChevronDown,
+  Download,
+  Eye,
+  LayoutDashboard,
+  Link2,
+  Pencil,
+  Plus,
+  Save,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
 import NextLink from "next/link";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -25,11 +37,20 @@ export function EditorShell({ project }: EditorShellProps) {
   const updateComponent = useStore(store, (state) => state.updateComponent);
   const removeComponent = useStore(store, (state) => state.removeComponent);
   const addNavigationPage = useStore(store, (state) => state.addNavigationPage);
-  const updateNavigationItem = useStore(store, (state) => state.updateNavigationItem);
-  const removeNavigationPage = useStore(store, (state) => state.removeNavigationPage);
+  const updateNavigationItem = useStore(
+    store,
+    (state) => state.updateNavigationItem,
+  );
+  const removeNavigationPage = useStore(
+    store,
+    (state) => state.removeNavigationPage,
+  );
   const setHomePage = useStore(store, (state) => state.setHomePage);
   const setNavigationMode = useStore(store, (state) => state.setNavigationMode);
-  const selectedComponentId = useStore(store, (state) => state.selectedComponentId);
+  const selectedComponentId = useStore(
+    store,
+    (state) => state.selectedComponentId,
+  );
   const selectComponent = useStore(store, (state) => state.selectComponent);
   const saveStatus = useStore(store, (state) => state.saveStatus);
   const markSaving = useStore(store, (state) => state.markSaving);
@@ -37,23 +58,50 @@ export function EditorShell({ project }: EditorShellProps) {
   const markSaveError = useStore(store, (state) => state.markSaveError);
   const mode = useStore(store, (state) => state.mode);
   const setMode = useStore(store, (state) => state.setMode);
-  const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "error">("idle");
-  const [activeTocTarget, setActiveTocTarget] = useState(editorProject.navigation[0]?.target ?? "");
+  const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "error">(
+    "idle",
+  );
+  const [activeTocTarget, setActiveTocTarget] = useState(
+    editorProject.navigation[0]?.target ?? "",
+  );
   const scrollAreaRef = useRef<HTMLElement | null>(null);
   const projectRef = useRef(editorProject);
   const saveStatusRef = useRef(saveStatus);
 
-  const activePage = editorProject.pages.find((page) => page.id === activePageId) ?? editorProject.pages[0];
+  const activePage =
+    editorProject.pages.find((page) => page.id === activePageId) ??
+    editorProject.pages[0];
   const isScrollMode = editorProject.navigationMode === "scroll";
-  const allComponents = editorProject.pages.flatMap((page) => page.sections[0]?.components ?? []);
+  const allComponents = editorProject.pages.flatMap(
+    (page) => page.sections[0]?.components ?? [],
+  );
   const activePageComponents = activePage?.sections[0]?.components ?? [];
   const pageLayouts = useMemo(() => {
-    return editorProject.pages.reduce<Array<{ page: ResumeProject["pages"][number]; components: ResumeComponent[]; offset: number; height: number }>>((layouts, page) => {
+    return editorProject.pages.reduce<
+      Array<{
+        page: ResumeProject["pages"][number];
+        components: ResumeComponent[];
+        offset: number;
+        height: number;
+      }>
+    >((layouts, page) => {
       const pageComponents = (page.sections[0]?.components ?? []).filter(
-        (component) => !(component.type === "section" && component.props.sectionFrame === true),
+        (component) =>
+          !(
+            component.type === "section" &&
+            component.props.sectionFrame === true
+          ),
       );
-      const height = Math.max(240, ...pageComponents.map((component) => component.y + component.height + 72));
-      const offset = layouts.reduce((total, layout) => total + layout.height + 16, 0);
+      const height = Math.max(
+        240,
+        ...pageComponents.map(
+          (component) => component.y + component.height + 72,
+        ),
+      );
+      const offset = layouts.reduce(
+        (total, layout) => total + layout.height + 16,
+        0,
+      );
       const layout = { page, components: pageComponents, offset, height };
       return [...layouts, layout];
     }, []);
@@ -65,12 +113,27 @@ export function EditorShell({ project }: EditorShellProps) {
           displayTop: component.y + layout.offset + 44,
         })),
       )
-    : activePageComponents.map((component) => ({ component, displayTop: component.y }));
+    : activePageComponents.map((component) => ({
+        component,
+        displayTop: component.y,
+      }));
   const components = isScrollMode ? allComponents : activePageComponents;
-  const selectedComponent = components.find((component) => component.id === selectedComponentId) ?? null;
+  const selectedComponent =
+    components.find((component) => component.id === selectedComponentId) ??
+    null;
   const canvasHeight = isScrollMode
-    ? Math.max(1120, pageLayouts.at(-1) ? pageLayouts.at(-1)!.offset + pageLayouts.at(-1)!.height : 1120)
-    : Math.max(1120, ...activePageComponents.map((component) => component.y + component.height + 160));
+    ? Math.max(
+        1120,
+        pageLayouts.at(-1)
+          ? pageLayouts.at(-1)!.offset + pageLayouts.at(-1)!.height
+          : 1120,
+      )
+    : Math.max(
+        1120,
+        ...activePageComponents.map(
+          (component) => component.y + component.height + 160,
+        ),
+      );
 
   useEffect(() => {
     projectRef.current = editorProject;
@@ -117,7 +180,10 @@ export function EditorShell({ project }: EditorShellProps) {
   }, [editorProject.navigation, isScrollMode]);
 
   const saveProject = useCallback(async () => {
-    if (saveStatusRef.current !== "dirty" && saveStatusRef.current !== "error") {
+    if (
+      saveStatusRef.current !== "dirty" &&
+      saveStatusRef.current !== "error"
+    ) {
       return;
     }
 
@@ -170,7 +236,10 @@ export function EditorShell({ project }: EditorShellProps) {
         pages: projectToSave.pages,
       });
 
-      navigator.sendBeacon?.(`/api/projects/${projectToSave.id}`, new Blob([body], { type: "application/json" }));
+      navigator.sendBeacon?.(
+        `/api/projects/${projectToSave.id}`,
+        new Blob([body], { type: "application/json" }),
+      );
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -191,7 +260,11 @@ export function EditorShell({ project }: EditorShellProps) {
     });
   }
 
-  function resizeComponent(component: ResumeComponent, deltaWidth: number, deltaHeight: number) {
+  function resizeComponent(
+    component: ResumeComponent,
+    deltaWidth: number,
+    deltaHeight: number,
+  ) {
     updateComponent(component.id, {
       width: Math.max(48, Math.round(component.width + deltaWidth)),
       height: Math.max(36, Math.round(component.height + deltaHeight)),
@@ -255,7 +328,11 @@ export function EditorShell({ project }: EditorShellProps) {
     }
   }
 
-  async function uploadMedia(componentId: string, file: File, mediaType: "image" | "video") {
+  async function uploadMedia(
+    componentId: string,
+    file: File,
+    mediaType: "image" | "video",
+  ) {
     const formData = new FormData();
     formData.set("file", file);
     formData.set("mediaType", mediaType);
@@ -265,7 +342,11 @@ export function EditorShell({ project }: EditorShellProps) {
       body: formData,
     });
 
-    const result = (await response.json()) as { path?: string; url?: string; error?: string };
+    const result = (await response.json()) as {
+      path?: string;
+      url?: string;
+      error?: string;
+    };
 
     if (!response.ok || !result.url) {
       throw new Error(result.error ?? "파일 업로드에 실패했습니다.");
@@ -282,7 +363,10 @@ export function EditorShell({ project }: EditorShellProps) {
     <div className="flex min-h-screen flex-col bg-zinc-100 text-zinc-950">
       <header className="flex h-14 items-center justify-between border-b border-zinc-200 bg-white px-3">
         <div className="flex items-center gap-2">
-          <NextLink href="/dashboard" className="inline-flex size-9 items-center justify-center rounded-md hover:bg-zinc-100">
+          <NextLink
+            href="/dashboard"
+            className="inline-flex size-9 items-center justify-center rounded-md hover:bg-zinc-100"
+          >
             <LayoutDashboard className="size-4" />
           </NextLink>
           <div>
@@ -318,7 +402,11 @@ export function EditorShell({ project }: EditorShellProps) {
           <button
             type="button"
             onClick={() => void saveProject()}
-            disabled={saveStatus === "saving" || saveStatus === "idle" || saveStatus === "saved"}
+            disabled={
+              saveStatus === "saving" ||
+              saveStatus === "idle" ||
+              saveStatus === "saved"
+            }
             className="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm disabled:cursor-not-allowed disabled:text-zinc-300"
           >
             <Save className="size-4" />
@@ -327,7 +415,10 @@ export function EditorShell({ project }: EditorShellProps) {
           <button
             type="button"
             onClick={() => setMode("edit")}
-            className={cn("inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-sm", mode === "edit" && "bg-zinc-950 text-white")}
+            className={cn(
+              "inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-sm",
+              mode === "edit" && "bg-zinc-950 text-white",
+            )}
           >
             <Pencil className="size-4" />
             편집
@@ -335,12 +426,19 @@ export function EditorShell({ project }: EditorShellProps) {
           <button
             type="button"
             onClick={() => setMode("preview")}
-            className={cn("inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-sm", mode === "preview" && "bg-zinc-950 text-white")}
+            className={cn(
+              "inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-sm",
+              mode === "preview" && "bg-zinc-950 text-white",
+            )}
           >
             <Eye className="size-4" />
             미리보기
           </button>
-          <button type="button" onClick={() => void exportPdf()} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm">
+          <button
+            type="button"
+            onClick={() => void exportPdf()}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm"
+          >
             <Download className="size-4" />
             PDF 저장
           </button>
@@ -350,15 +448,26 @@ export function EditorShell({ project }: EditorShellProps) {
             className="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm"
           >
             <Link2 className="size-4" />
-            {shareStatus === "copied" ? "복사됨" : shareStatus === "error" ? "복사 실패" : "URL 공유"}
+            {shareStatus === "copied"
+              ? "복사됨"
+              : shareStatus === "error"
+                ? "복사 실패"
+                : "URL 공유"}
           </button>
         </div>
       </header>
 
-      <div className={cn("grid flex-1", mode === "edit" ? "grid-cols-[240px_1fr_280px]" : "grid-cols-1")}>
+      <div
+        className={cn(
+          "grid flex-1",
+          mode === "edit" ? "grid-cols-[240px_1fr_280px]" : "grid-cols-1",
+        )}
+      >
         {mode === "edit" ? (
           <aside className="border-r border-zinc-200 bg-white p-3">
-            <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">Insert</h2>
+            <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              Insert
+            </h2>
             <div className="mt-3 grid gap-2">
               {insertableComponents.map((item) => (
                 <button
@@ -367,8 +476,12 @@ export function EditorShell({ project }: EditorShellProps) {
                   onClick={() => addComponent(item.type)}
                   className="rounded-md border border-zinc-200 p-3 text-left transition hover:border-zinc-400 hover:bg-zinc-50"
                 >
-                  <span className="block text-sm font-medium">{item.label}</span>
-                  <span className="mt-1 block text-xs leading-5 text-zinc-500">{item.description}</span>
+                  <span className="block text-sm font-medium">
+                    {item.label}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-zinc-500">
+                    {item.description}
+                  </span>
                 </button>
               ))}
             </div>
@@ -389,7 +502,10 @@ export function EditorShell({ project }: EditorShellProps) {
                 onNavigate={handleHeaderNavigation}
                 onTitleClick={() => {
                   if (isScrollMode) {
-                    scrollAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                    scrollAreaRef.current?.scrollTo({
+                      top: 0,
+                      behavior: "smooth",
+                    });
                     return;
                   }
 
@@ -401,7 +517,9 @@ export function EditorShell({ project }: EditorShellProps) {
               />
               {isScrollMode
                 ? pageLayouts.map((layout) => {
-                    const navItem = editorProject.navigation.find((item) => item.target === layout.page.slug);
+                    const navItem = editorProject.navigation.find(
+                      (item) => item.target === layout.page.slug,
+                    );
                     const target = navItem?.target ?? layout.page.slug;
                     const label = navItem?.label ?? layout.page.title;
 
@@ -412,7 +530,9 @@ export function EditorShell({ project }: EditorShellProps) {
                         className="absolute left-0 w-full scroll-mt-6 px-12 pt-4"
                         style={{ top: layout.offset + 12, height: 44 }}
                       >
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">{label}</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                          {label}
+                        </p>
                       </div>
                     );
                   })
@@ -426,7 +546,9 @@ export function EditorShell({ project }: EditorShellProps) {
                   isSelected={selectedComponentId === component.id}
                   onSelect={() => selectComponent(component.id)}
                   onDelete={() => removeComponent(component.id)}
-                  onResize={(deltaWidth, deltaHeight) => resizeComponent(component, deltaWidth, deltaHeight)}
+                  onResize={(deltaWidth, deltaHeight) =>
+                    resizeComponent(component, deltaWidth, deltaHeight)
+                  }
                 />
               ))}
             </div>
@@ -449,9 +571,11 @@ export function EditorShell({ project }: EditorShellProps) {
         <ScrollToc
           navigation={editorProject.navigation}
           activeTarget={
-            editorProject.navigation.some((item) => item.target === activeTocTarget)
+            editorProject.navigation.some(
+              (item) => item.target === activeTocTarget,
+            )
               ? activeTocTarget
-              : editorProject.navigation[0]?.target ?? ""
+              : (editorProject.navigation[0]?.target ?? "")
           }
           onSelect={(target) => handleHeaderNavigation(target)}
         />
@@ -473,12 +597,16 @@ function RouteSwitcher({
   activePageId?: string;
   onSelectPage: (id: string) => void;
   onAddNavigationPage: () => void;
-  onUpdateNavigationItem: (id: string, patch: { label?: string; target?: string }) => void;
+  onUpdateNavigationItem: (
+    id: string,
+    patch: { label?: string; target?: string },
+  ) => void;
   onRemoveNavigationPage: (id: string) => void;
   onSetHomePage: (id: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const activePage = project.pages.find((page) => page.id === activePageId) ?? project.pages[0];
+  const activePage =
+    project.pages.find((page) => page.id === activePageId) ?? project.pages[0];
 
   return (
     <div className="relative">
@@ -494,15 +622,24 @@ function RouteSwitcher({
         <div className="absolute right-0 top-11 z-50 w-80 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg">
           <div className="grid gap-2">
             {project.navigation.map((item, index) => {
-              const linkedPage = project.pages.find((page) => page.slug === item.target);
+              const linkedPage = project.pages.find(
+                (page) => page.slug === item.target,
+              );
               const isHome = index === 0;
 
               return (
-                <div key={item.id} className="grid gap-2 rounded-md bg-zinc-50 p-2">
+                <div
+                  key={item.id}
+                  className="grid gap-2 rounded-md bg-zinc-50 p-2"
+                >
                   <div className="flex items-center gap-1">
                     <input
                       value={item.label}
-                      onChange={(event) => onUpdateNavigationItem(item.id, { label: event.target.value })}
+                      onChange={(event) =>
+                        onUpdateNavigationItem(item.id, {
+                          label: event.target.value,
+                        })
+                      }
                       className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs"
                     />
                     <button
@@ -510,7 +647,8 @@ function RouteSwitcher({
                       onClick={() => linkedPage && onSelectPage(linkedPage.id)}
                       className={cn(
                         "h-8 rounded border border-zinc-200 px-2 text-xs",
-                        linkedPage?.id === activePageId && "bg-zinc-950 text-white",
+                        linkedPage?.id === activePageId &&
+                          "bg-zinc-950 text-white",
                       )}
                     >
                       편집
@@ -526,7 +664,11 @@ function RouteSwitcher({
                   <div className="flex items-center gap-1">
                     <input
                       value={item.target}
-                      onChange={(event) => onUpdateNavigationItem(item.id, { target: normalizeAnchor(event.target.value) })}
+                      onChange={(event) =>
+                        onUpdateNavigationItem(item.id, {
+                          target: normalizeAnchor(event.target.value),
+                        })
+                      }
                       className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs text-zinc-500"
                     />
                     <button
@@ -534,7 +676,9 @@ function RouteSwitcher({
                       onClick={() => onSetHomePage(item.id)}
                       className={cn(
                         "h-8 rounded border border-zinc-200 px-2 text-xs",
-                        isHome ? "bg-emerald-50 text-emerald-700" : "text-zinc-500",
+                        isHome
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "text-zinc-500",
                       )}
                     >
                       {isHome ? "대표" : "대표 지정"}
@@ -573,32 +717,40 @@ function SiteHeader({
 }) {
   return (
     <header className="flex min-h-16 items-center justify-between border-b border-zinc-100 px-8">
-      <button type="button" onClick={onTitleClick} className="text-sm font-semibold text-zinc-950 hover:text-emerald-700">
+      <button
+        type="button"
+        onClick={onTitleClick}
+        className="text-sm font-semibold text-zinc-950 hover:text-emerald-700"
+      >
         {project.title}
       </button>
       {project.navigationMode === "scroll" ? (
         <span className="text-xs font-medium text-zinc-400">Scroll Mode</span>
       ) : (
-      <nav className="flex flex-wrap items-center justify-end gap-2">
-        {project.navigation.map((item) => (
-          <a
-            key={item.id}
-            href={project.navigationMode === "scroll" ? `#${item.target}` : `/${project.slug}/${item.target}`}
-            onClick={(event) => {
-              if (mode === "edit" || mode === "preview") {
-                event.preventDefault();
-                onNavigate(item.target);
+        <nav className="flex flex-wrap items-center justify-end gap-2">
+          {project.navigation.map((item) => (
+            <a
+              key={item.id}
+              href={
+                project.navigationMode === "scroll"
+                  ? `#${item.target}`
+                  : `/${project.slug}/${item.target}`
               }
-            }}
-            className={cn(
-              "rounded-md px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50",
-              activeTarget === item.target && "bg-zinc-100 text-zinc-950",
-            )}
-          >
-            {item.label}
-          </a>
-        ))}
-      </nav>
+              onClick={(event) => {
+                if (mode === "edit" || mode === "preview") {
+                  event.preventDefault();
+                  onNavigate(item.target);
+                }
+              }}
+              className={cn(
+                "rounded-md px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50",
+                activeTarget === item.target && "bg-zinc-100 text-zinc-950",
+              )}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
       )}
     </header>
   );
@@ -632,7 +784,8 @@ function CanvasComponent({
     left: component.x,
     top: displayTop,
     transform: CSS.Translate.toString(transform),
-    zIndex: component.type === "section" || component.type === "container" ? 0 : 5,
+    zIndex:
+      component.type === "section" || component.type === "container" ? 0 : 5,
   };
 
   function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -669,7 +822,8 @@ function CanvasComponent({
       }}
       className={cn(
         "absolute rounded-md",
-        !preview && "cursor-move outline outline-1 outline-dashed outline-zinc-300",
+        !preview &&
+          "cursor-move outline outline-1 outline-dashed outline-zinc-300",
         isSelected && "outline-2 outline-emerald-500",
       )}
     >
@@ -688,7 +842,10 @@ function CanvasComponent({
         </button>
       ) : null}
       {component.type === "text" ? (
-        <div className="h-full w-full p-2 text-zinc-900" style={component.props as CSSProperties}>
+        <div
+          className="h-full w-full p-2 text-zinc-900"
+          style={component.props as CSSProperties}
+        >
           {component.content}
         </div>
       ) : component.type === "divider" ? (
@@ -700,7 +857,9 @@ function CanvasComponent({
           alt=""
           className="h-full w-full rounded-md"
           style={{
-            objectFit: String(component.props.objectFit ?? "cover") as CSSProperties["objectFit"],
+            objectFit: String(
+              component.props.objectFit ?? "cover",
+            ) as CSSProperties["objectFit"],
             objectPosition: `${Number(component.props.objectPositionX ?? 50)}% ${Number(component.props.objectPositionY ?? 50)}%`,
           }}
         />
@@ -710,12 +869,17 @@ function CanvasComponent({
           className="h-full w-full rounded-md"
           controls={preview}
           style={{
-            objectFit: String(component.props.objectFit ?? "cover") as CSSProperties["objectFit"],
+            objectFit: String(
+              component.props.objectFit ?? "cover",
+            ) as CSSProperties["objectFit"],
             objectPosition: `${Number(component.props.objectPositionX ?? 50)}% ${Number(component.props.objectPositionY ?? 50)}%`,
           }}
         />
       ) : component.type === "button" ? (
-        <button type="button" className="h-full w-full rounded-md bg-zinc-950 px-4 text-sm font-medium text-white">
+        <button
+          type="button"
+          className="h-full w-full rounded-md bg-zinc-950 px-4 text-sm font-medium text-white"
+        >
           {component.content ?? "버튼"}
         </button>
       ) : component.type === "link" ? (
@@ -735,9 +899,15 @@ function CanvasComponent({
       ) : component.type === "section" || component.type === "container" ? (
         <div
           className="flex h-full w-full items-start rounded-md border border-dashed p-3 text-sm font-medium text-zinc-600"
-          id={component.type === "section" ? normalizeAnchor(component.content ?? component.id) : undefined}
+          id={
+            component.type === "section"
+              ? normalizeAnchor(component.content ?? component.id)
+              : undefined
+          }
           style={{
-            backgroundColor: String(component.props.backgroundColor ?? "#f8fafc"),
+            backgroundColor: String(
+              component.props.backgroundColor ?? "#f8fafc",
+            ),
             borderColor: String(component.props.borderColor ?? "#d4d4d8"),
           }}
         >
@@ -774,7 +944,11 @@ function PropertyPanel({
   selectedComponent: ResumeComponent | null;
   onUpdate: (id: string, patch: Partial<ResumeComponent>) => void;
   onDelete: (id: string) => void;
-  onUpload: (id: string, file: File, mediaType: "image" | "video") => Promise<void>;
+  onUpload: (
+    id: string,
+    file: File,
+    mediaType: "image" | "video",
+  ) => Promise<void>;
   project: ResumeProject;
   onSetNavigationMode: (mode: ResumeProject["navigationMode"]) => void;
 }) {
@@ -792,7 +966,9 @@ function PropertyPanel({
     try {
       await onUpload(selectedComponent.id, file, mediaType);
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "파일 업로드에 실패했습니다.");
+      setUploadError(
+        error instanceof Error ? error.message : "파일 업로드에 실패했습니다.",
+      );
     } finally {
       setIsUploading(false);
     }
@@ -800,13 +976,19 @@ function PropertyPanel({
 
   return (
     <aside className="border-l border-zinc-200 bg-white p-4">
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Properties</h2>
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        Properties
+      </h2>
       <div className="mt-4 grid gap-4 text-sm">
         <label className="grid gap-1">
           <span className="text-zinc-500">Navigation Mode</span>
           <select
             value={project.navigationMode}
-            onChange={(event) => onSetNavigationMode(event.target.value as ResumeProject["navigationMode"])}
+            onChange={(event) =>
+              onSetNavigationMode(
+                event.target.value as ResumeProject["navigationMode"],
+              )
+            }
             className="h-9 rounded-md border border-zinc-200 px-2"
           >
             <option value="scroll">Scroll</option>
@@ -815,14 +997,22 @@ function PropertyPanel({
         </label>
         <label className="grid gap-1">
           <span className="text-zinc-500">Canvas Components</span>
-          <input readOnly value={`${components.length} items`} className="h-9 rounded-md border border-zinc-200 px-2" />
+          <input
+            readOnly
+            value={`${components.length} items`}
+            className="h-9 rounded-md border border-zinc-200 px-2"
+          />
         </label>
         {selectedComponent ? (
           <div className="grid gap-4 border-t border-zinc-100 pt-4">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="font-medium text-zinc-950">{selectedComponent.type}</p>
-                <p className="text-xs text-zinc-500">{selectedComponent.id.slice(0, 8)}</p>
+                <p className="font-medium text-zinc-950">
+                  {selectedComponent.type}
+                </p>
+                <p className="text-xs text-zinc-500">
+                  {selectedComponent.id.slice(0, 8)}
+                </p>
               </div>
               <button
                 type="button"
@@ -838,34 +1028,51 @@ function PropertyPanel({
                 <span className="text-zinc-500">Text</span>
                 <textarea
                   value={selectedComponent.content ?? ""}
-                  onChange={(event) => onUpdate(selectedComponent.id, { content: event.target.value })}
+                  onChange={(event) =>
+                    onUpdate(selectedComponent.id, {
+                      content: event.target.value,
+                    })
+                  }
                   className="min-h-28 rounded-md border border-zinc-200 p-2"
                 />
               </label>
             ) : null}
 
-            {selectedComponent.type === "section" || selectedComponent.type === "container" ? (
+            {selectedComponent.type === "section" ||
+            selectedComponent.type === "container" ? (
               <label className="grid gap-1">
                 <span className="text-zinc-500">Label</span>
                 <input
                   value={selectedComponent.content ?? ""}
-                  onChange={(event) => onUpdate(selectedComponent.id, { content: event.target.value })}
+                  onChange={(event) =>
+                    onUpdate(selectedComponent.id, {
+                      content: event.target.value,
+                    })
+                  }
                   className="h-9 rounded-md border border-zinc-200 px-2"
                 />
               </label>
             ) : null}
 
-            {selectedComponent.type === "image" || selectedComponent.type === "video" ? (
+            {selectedComponent.type === "image" ||
+            selectedComponent.type === "video" ? (
               <div className="grid gap-3">
                 <label className="grid gap-1">
-                  <span className="text-zinc-500">{selectedComponent.type === "image" ? "Image File" : "Video File"}</span>
+                  <span className="text-zinc-500">
+                    {selectedComponent.type === "image"
+                      ? "Image File"
+                      : "Video File"}
+                  </span>
                   <input
                     type="file"
-                    accept={selectedComponent.type === "image" ? "image/*" : "video/*"}
+                    accept={
+                      selectedComponent.type === "image" ? "image/*" : "video/*"
+                    }
                     disabled={isUploading}
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      const mediaType = selectedComponent.type === "image" ? "image" : "video";
+                      const mediaType =
+                        selectedComponent.type === "image" ? "image" : "video";
                       if (file) {
                         void handleUpload(file, mediaType);
                       }
@@ -874,9 +1081,15 @@ function PropertyPanel({
                   />
                   <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
                     <Upload className="size-3.5" />
-                    {isUploading ? "업로드 중..." : selectedComponent.content ? "업로드됨" : "내 컴퓨터에서 파일을 선택하세요."}
+                    {isUploading
+                      ? "업로드 중..."
+                      : selectedComponent.content
+                        ? "업로드됨"
+                        : "내 컴퓨터에서 파일을 선택하세요."}
                   </span>
-                  {uploadError ? <span className="text-xs text-red-600">{uploadError}</span> : null}
+                  {uploadError ? (
+                    <span className="text-xs text-red-600">{uploadError}</span>
+                  ) : null}
                 </label>
                 <label className="grid gap-1">
                   <span className="text-zinc-500">Fit</span>
@@ -884,7 +1097,10 @@ function PropertyPanel({
                     value={String(selectedComponent.props.objectFit ?? "cover")}
                     onChange={(event) =>
                       onUpdate(selectedComponent.id, {
-                        props: { ...selectedComponent.props, objectFit: event.target.value },
+                        props: {
+                          ...selectedComponent.props,
+                          objectFit: event.target.value,
+                        },
                       })
                     }
                     className="h-9 rounded-md border border-zinc-200 px-2"
@@ -899,7 +1115,10 @@ function PropertyPanel({
                   value={Number(selectedComponent.props.objectPositionX ?? 50)}
                   onChange={(value) =>
                     onUpdate(selectedComponent.id, {
-                      props: { ...selectedComponent.props, objectPositionX: clamp(value, 0, 100) },
+                      props: {
+                        ...selectedComponent.props,
+                        objectPositionX: clamp(value, 0, 100),
+                      },
                     })
                   }
                 />
@@ -908,19 +1127,31 @@ function PropertyPanel({
                   value={Number(selectedComponent.props.objectPositionY ?? 50)}
                   onChange={(value) =>
                     onUpdate(selectedComponent.id, {
-                      props: { ...selectedComponent.props, objectPositionY: clamp(value, 0, 100) },
+                      props: {
+                        ...selectedComponent.props,
+                        objectPositionY: clamp(value, 0, 100),
+                      },
                     })
                   }
                 />
               </div>
             ) : null}
 
-            {selectedComponent.type === "button" || selectedComponent.type === "link" ? (
+            {selectedComponent.type === "button" ||
+            selectedComponent.type === "link" ? (
               <label className="grid gap-1">
-                <span className="text-zinc-500">{selectedComponent.type === "button" ? "Button Label" : "Link Label"}</span>
+                <span className="text-zinc-500">
+                  {selectedComponent.type === "button"
+                    ? "Button Label"
+                    : "Link Label"}
+                </span>
                 <input
                   value={selectedComponent.content ?? ""}
-                  onChange={(event) => onUpdate(selectedComponent.id, { content: event.target.value })}
+                  onChange={(event) =>
+                    onUpdate(selectedComponent.id, {
+                      content: event.target.value,
+                    })
+                  }
                   className="h-9 rounded-md border border-zinc-200 px-2"
                 />
               </label>
@@ -933,7 +1164,10 @@ function PropertyPanel({
                   value={String(selectedComponent.props.href ?? "")}
                   onChange={(event) =>
                     onUpdate(selectedComponent.id, {
-                      props: { ...selectedComponent.props, href: event.target.value },
+                      props: {
+                        ...selectedComponent.props,
+                        href: event.target.value,
+                      },
                     })
                   }
                   placeholder="https://example.com"
@@ -943,10 +1177,34 @@ function PropertyPanel({
             ) : null}
 
             <div className="grid grid-cols-2 gap-2">
-              <NumberField label="X" value={selectedComponent.x} onChange={(value) => onUpdate(selectedComponent.id, { x: value })} />
-              <NumberField label="Y" value={selectedComponent.y} onChange={(value) => onUpdate(selectedComponent.id, { y: value })} />
-              <NumberField label="Width" value={selectedComponent.width} onChange={(value) => onUpdate(selectedComponent.id, { width: value })} />
-              <NumberField label="Height" value={selectedComponent.height} onChange={(value) => onUpdate(selectedComponent.id, { height: value })} />
+              <NumberField
+                label="X"
+                value={selectedComponent.x}
+                onChange={(value) =>
+                  onUpdate(selectedComponent.id, { x: value })
+                }
+              />
+              <NumberField
+                label="Y"
+                value={selectedComponent.y}
+                onChange={(value) =>
+                  onUpdate(selectedComponent.id, { y: value })
+                }
+              />
+              <NumberField
+                label="Width"
+                value={selectedComponent.width}
+                onChange={(value) =>
+                  onUpdate(selectedComponent.id, { width: value })
+                }
+              />
+              <NumberField
+                label="Height"
+                value={selectedComponent.height}
+                onChange={(value) =>
+                  onUpdate(selectedComponent.id, { height: value })
+                }
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -957,7 +1215,10 @@ function PropertyPanel({
                   value={String(selectedComponent.props.color ?? "#111827")}
                   onChange={(event) =>
                     onUpdate(selectedComponent.id, {
-                      props: { ...selectedComponent.props, color: event.target.value },
+                      props: {
+                        ...selectedComponent.props,
+                        color: event.target.value,
+                      },
                     })
                   }
                   className="h-9 w-full rounded-md border border-zinc-200"
@@ -976,7 +1237,8 @@ function PropertyPanel({
           </div>
         ) : (
           <div className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
-            캔버스의 컴포넌트를 선택하면 내용, 위치, 크기, 색상을 수정할 수 있습니다.
+            캔버스의 컴포넌트를 선택하면 내용, 위치, 크기, 색상을 수정할 수
+            있습니다.
           </div>
         )}
       </div>
@@ -1016,8 +1278,10 @@ function ScrollToc({
   onSelect: (target: string) => void;
 }) {
   return (
-    <aside className="fixed left-[calc(50%+450px)] top-1/2 z-40 hidden w-44 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white/95 p-2 shadow-sm lg:block">
-      <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">Contents</p>
+    <aside className="fixed left-[calc(50%+300px)] top-1/2 z-40 hidden w-44 -translate-y-1/2 p-2 lg:block text-right">
+      {/* <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 ">
+        Contents
+      </p> */}
       <div className="grid gap-1">
         {navigation.map((item) => {
           const isActive = activeTarget === item.target;
@@ -1028,8 +1292,10 @@ function ScrollToc({
               type="button"
               onClick={() => onSelect(item.target)}
               className={cn(
-                "rounded-md px-2 py-1.5 text-left transition hover:bg-zinc-100 hover:text-base hover:font-semibold hover:text-zinc-950",
-                isActive ? "text-base font-semibold text-zinc-950" : "text-xs font-medium text-zinc-400",
+                "rounded-md px-2 py-1.5 text-right transition hover:bg-zinc-100 hover:text-base hover:font-semibold hover:text-zinc-950 ",
+                isActive
+                  ? "text-base font-semibold text-zinc-950"
+                  : "text-xs font-medium text-zinc-400",
               )}
             >
               {item.label}
@@ -1078,7 +1344,9 @@ function createPdfSafeClone(source: HTMLElement) {
 }
 
 function sanitizePdfColors(root: HTMLElement) {
-  root.querySelectorAll("[data-editor-control='true']").forEach((node) => node.remove());
+  root
+    .querySelectorAll("[data-editor-control='true']")
+    .forEach((node) => node.remove());
   const nodes = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
 
   nodes.forEach((node) => {
@@ -1111,9 +1379,13 @@ function sanitizePdfColors(root: HTMLElement) {
     inline.objectFit = computed.objectFit;
     inline.borderRadius = computed.borderRadius;
     inline.borderWidth = computed.borderWidth;
-    inline.borderStyle = computed.borderStyle === "none" ? "solid" : computed.borderStyle;
+    inline.borderStyle =
+      computed.borderStyle === "none" ? "solid" : computed.borderStyle;
     node.style.color = safeColor(computed.color, "#111827");
-    node.style.backgroundColor = safeColor(computed.backgroundColor, "transparent");
+    node.style.backgroundColor = safeColor(
+      computed.backgroundColor,
+      "transparent",
+    );
     node.style.borderColor = safeColor(computed.borderColor, "#e5e7eb");
     node.style.outlineColor = "transparent";
     node.style.boxShadow = "none";
@@ -1122,5 +1394,7 @@ function sanitizePdfColors(root: HTMLElement) {
 }
 
 function safeColor(value: string, fallback: string) {
-  return /(lab|lch|oklab|oklch|color-mix|var)\(/i.test(value) ? fallback : value;
+  return /(lab|lch|oklab|oklch|color-mix|var)\(/i.test(value)
+    ? fallback
+    : value;
 }
