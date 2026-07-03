@@ -2,7 +2,7 @@ import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { ProjectList } from "@/components/dashboard/project-list";
 import { TopNav } from "@/components/layout/top-nav";
 import { getSubscriptionTier, projectLimits } from "@/config/plans";
-import { createProjectAction } from "@/app/dashboard/actions";
+import { createProjectAction, deleteProjectAction, duplicateProjectAction } from "@/app/dashboard/actions";
 import { getCurrentUser, listProjects } from "@/server/projects";
 
 const errorMessages: Record<string, string> = {
@@ -47,6 +47,8 @@ export default async function DashboardPage({
           limit={projectLimits[tier]}
           canEdit={Boolean(user)}
           createAction={createProjectAction}
+          duplicateAction={duplicateProjectAction}
+          deleteAction={deleteProjectAction}
         />
       </main>
     </div>

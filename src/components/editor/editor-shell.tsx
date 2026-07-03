@@ -302,6 +302,7 @@ export function EditorShell({ project }: EditorShellProps) {
     const html2pdf = (await import("html2pdf.js")).default;
 
     try {
+      await waitForPdfNode(pdfTarget);
       await html2pdf()
         .set({
           filename: `${editorProject.slug}.pdf`,
@@ -309,7 +310,7 @@ export function EditorShell({ project }: EditorShellProps) {
           html2canvas: { scale: 2, backgroundColor: "#ffffff", useCORS: true },
           jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
         })
-        .from(pdfTarget)
+        .from(pdfTarget.firstElementChild ?? pdfTarget)
         .save();
     } finally {
       pdfTarget.remove();
@@ -465,7 +466,7 @@ export function EditorShell({ project }: EditorShellProps) {
         )}
       >
         {mode === "edit" ? (
-          <aside className="border-r border-zinc-200 bg-white p-3">
+          <aside className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto border-r border-zinc-200 bg-white p-3">
             <h2 className="px-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
               Insert
             </h2>
@@ -976,7 +977,7 @@ function PropertyPanel({
   }
 
   return (
-    <aside className="border-l border-zinc-200 bg-white p-4">
+    <aside className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto border-l border-zinc-200 bg-white p-4">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
         Properties
       </h2>
@@ -1340,12 +1341,13 @@ function createPdfExportNode({
   canvasHeight: number;
 }) {
   const wrapper = document.createElement("div");
-  wrapper.style.position = "absolute";
+  wrapper.style.position = "fixed";
   wrapper.style.left = "0";
   wrapper.style.top = "0";
   wrapper.style.background = "#ffffff";
   wrapper.style.color = "#111827";
   wrapper.style.width = "840px";
+  wrapper.style.height = `${canvasHeight}px`;
   wrapper.style.minHeight = `${canvasHeight}px`;
   wrapper.style.zIndex = "2147483647";
   wrapper.style.pointerEvents = "none";
@@ -1354,6 +1356,7 @@ function createPdfExportNode({
   const canvas = document.createElement("div");
   canvas.style.position = "relative";
   canvas.style.width = "840px";
+  canvas.style.height = `${canvasHeight}px`;
   canvas.style.minHeight = `${canvasHeight}px`;
   canvas.style.background = "#ffffff";
   canvas.style.color = "#111827";
@@ -1416,6 +1419,27 @@ function createPdfExportNode({
   document.body.appendChild(wrapper);
 
   return wrapper;
+}
+
+async function waitForPdfNode(root: HTMLElement) {
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+  const images = Array.from(root.querySelectorAll("img"));
+  await Promise.all(
+    images.map(
+      (image) =>
+        new Promise<void>((resolve) => {
+          if (image.complete) {
+            resolve();
+            return;
+          }
+
+          image.onload = () => resolve();
+          image.onerror = () => resolve();
+        }),
+    ),
+  );
 }
 
 function createPdfComponent(component: ResumeComponent, top: number) {

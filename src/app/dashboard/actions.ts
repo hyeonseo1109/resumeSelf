@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { getSubscriptionTier, projectLimits } from "@/config/plans";
 import { appendSlugSuffix, createSlugCandidate } from "@/lib/utils/slug";
 import { createClient } from "@/lib/supabase/server";
@@ -93,6 +94,21 @@ async function resolveAvailableSlug(baseSlug: string) {
   return `${baseSlug}-${Date.now().toString(36)}`;
 }
 
+function clonePagesWithNewIds(pages: ResumePage[]) {
+  return pages.map((page) => ({
+    ...page,
+    id: crypto.randomUUID(),
+    sections: page.sections.map((section) => ({
+      ...section,
+      id: crypto.randomUUID(),
+      components: section.components.map((component) => ({
+        ...component,
+        id: crypto.randomUUID(),
+      })),
+    })),
+  }));
+}
+
 export async function createProjectAction(formData: FormData) {
   const supabase = await createClient();
 
@@ -160,4 +176,97 @@ export async function createProjectAction(formData: FormData) {
   }
 
   redirect(`/editor/${data.id}`);
+}
+
+export async function duplicateProjectAction(formData: FormData) {
+  const projectId = String(formData.get("projectId") ?? "");
+  const supabase = await createClient();
+
+  if (!supabase) {
+    redirect("/dashboard?error=supabase-not-configured");
+  }
+
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) {
+    redirect("/dashboard?error=login-required");
+  }
+
+  const tier = getSubscriptionTier(user.email);
+  const limit = projectLimits[tier];
+  const { count } = await supabase
+    .from("projects")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", user.id);
+
+  if ((count ?? 0) >= limit) {
+    redirect("/dashboard?error=project-limit");
+  }
+
+  const { data: source, error: sourceError } = await supabase
+    .from("projects")
+    .select("title, slug, mode, navigation_mode, navigation, pages")
+    .eq("id", projectId)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+
+  if (sourceError || !source) {
+    redirect("/dashboard?error=project-not-found");
+  }
+
+  const slug = await resolveAvailableSlug(`${source.slug}-copy`);
+  const navigation = (source.navigation ?? []).map((item: NavigationItem, order: number) => ({
+    ...item,
+    id: crypto.randomUUID(),
+    order,
+  }));
+
+  const { data, error } = await supabase
+    .from("projects")
+    .insert({
+      owner_id: user.id,
+      title: `${source.title} Copy`,
+      slug,
+      mode: source.mode,
+      navigation_mode: source.navigation_mode,
+      navigation,
+      pages: clonePagesWithNewIds((source.pages ?? []) as ResumePage[]),
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    redirect(`/dashboard?error=${encodeURIComponent(error?.message ?? "duplicate-failed")}`);
+  }
+
+  redirect(`/editor/${data.id}`);
+}
+
+export async function deleteProjectAction(formData: FormData) {
+  const projectId = String(formData.get("projectId") ?? "");
+  const supabase = await createClient();
+
+  if (!supabase) {
+    redirect("/dashboard?error=supabase-not-configured");
+  }
+
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) {
+    redirect("/dashboard?error=login-required");
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .delete()
+    .eq("id", projectId)
+    .eq("owner_id", user.id);
+
+  if (error) {
+    redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/dashboard");
 }

@@ -9,9 +9,19 @@ interface ProjectListProps {
   limit: number;
   canEdit: boolean;
   createAction: (formData: FormData) => void | Promise<void>;
+  duplicateAction: (formData: FormData) => void | Promise<void>;
+  deleteAction: (formData: FormData) => void | Promise<void>;
 }
 
-export function ProjectList({ projects, tier, limit, canEdit, createAction }: ProjectListProps) {
+export function ProjectList({
+  projects,
+  tier,
+  limit,
+  canEdit,
+  createAction,
+  duplicateAction,
+  deleteAction,
+}: ProjectListProps) {
   const canCreate = canEdit && projects.length < limit;
 
   return (
@@ -62,19 +72,25 @@ export function ProjectList({ projects, tier, limit, canEdit, createAction }: Pr
                 <ExternalLink className="size-4" />
                 열기
               </Link>
-              <button
-                disabled={!canEdit}
-                className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 disabled:cursor-not-allowed disabled:text-zinc-300"
-              >
-                <Copy className="size-4" />
-                복제
-              </button>
-              <button
-                disabled={!canEdit}
-                className="ml-auto inline-flex size-9 items-center justify-center rounded-md text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:text-zinc-200 disabled:hover:bg-transparent"
-              >
-                <Trash2 className="size-4" />
-              </button>
+              <form action={duplicateAction}>
+                <input type="hidden" name="projectId" value={project.id} />
+                <button
+                  disabled={!canEdit || !canCreate}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 disabled:cursor-not-allowed disabled:text-zinc-300"
+                >
+                  <Copy className="size-4" />
+                  복제
+                </button>
+              </form>
+              <form action={deleteAction} className="ml-auto">
+                <input type="hidden" name="projectId" value={project.id} />
+                <button
+                  disabled={!canEdit}
+                  className="inline-flex size-9 items-center justify-center rounded-md text-zinc-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:text-zinc-200 disabled:hover:bg-transparent"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </form>
             </div>
           </article>
         ))}
