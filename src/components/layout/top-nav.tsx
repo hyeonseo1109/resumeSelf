@@ -1,6 +1,16 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
+import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/server/projects";
+
+async function logoutAction() {
+  "use server";
+
+  const supabase = await createClient();
+  await supabase?.auth.signOut();
+  redirect("/");
+}
 
 export async function TopNav() {
   const user = await getCurrentUser();
@@ -26,11 +36,21 @@ export async function TopNav() {
           >
             Dashboard
           </Link> */}
-          <div className="hidden sm:block">
+          <div className="flex items-center gap-2">
             {displayName ? (
-              <span className="inline-flex h-9 max-w-56 items-center truncate rounded-md px-3 text-xs font-medium text-zinc-700">
-                {displayName}님, 안녕하세요!
-              </span>
+              <>
+                <span className="hidden h-9 max-w-56 items-center truncate rounded-md px-3 text-xs font-medium text-zinc-700 sm:inline-flex">
+                  {displayName}님, 안녕하세요!
+                </span>
+                <form action={logoutAction}>
+                  <button
+                    type="submit"
+                    className="inline-flex h-9 items-center rounded-md border border-zinc-200 px-3 text-xs font-medium text-zinc-600 transition hover:border-zinc-300 hover:bg-zinc-50"
+                  >
+                    로그아웃
+                  </button>
+                </form>
+              </>
             ) : (
               <OAuthButtons className="[&_button]:h-9 [&_button]:px-3 [&_button]:text-xs [&_p]:hidden" />
             )}

@@ -48,6 +48,14 @@ interface GuideLine {
   position: number;
 }
 
+interface SpacingGuide {
+  axis: "x" | "y";
+  start: number;
+  end: number;
+  cross: number;
+  distance: number;
+}
+
 const FONT_OPTIONS = [
   { label: "System", value: "Arial, Helvetica, sans-serif" },
   { label: "Serif", value: "Georgia, 'Times New Roman', serif" },
@@ -124,6 +132,7 @@ export function EditorShell({ project }: EditorShellProps) {
   );
   const [smartGuidesEnabled, setSmartGuidesEnabled] = useState(true);
   const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
+  const [spacingGuides, setSpacingGuides] = useState<SpacingGuide[]>([]);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -373,6 +382,52 @@ export function EditorShell({ project }: EditorShellProps) {
       break;
     }
 
+    const horizontalPeers = components
+      .filter((item) => item.id !== component.id && !item.props.popupId)
+      .filter((item) => nextY + nextHeight > item.y && nextY < item.y + item.height)
+      .sort((a, b) => a.x - b.x);
+    for (let leftIndex = 0; leftIndex < horizontalPeers.length; leftIndex += 1) {
+      for (let rightIndex = leftIndex + 1; rightIndex < horizontalPeers.length; rightIndex += 1) {
+        const left = horizontalPeers[leftIndex];
+        const right = horizontalPeers[rightIndex];
+        const leftRight = left.x + left.width;
+        const available = right.x - leftRight - nextWidth;
+        if (available < 0) continue;
+
+        const candidateX = leftRight + available / 2;
+        if (Math.abs(candidateX - nextX) > tolerance) continue;
+
+        snappedX = Math.round(candidateX);
+        guides.push({ axis: "x", position: leftRight });
+        guides.push({ axis: "x", position: right.x });
+        leftIndex = horizontalPeers.length;
+        break;
+      }
+    }
+
+    const verticalPeers = components
+      .filter((item) => item.id !== component.id && !item.props.popupId)
+      .filter((item) => nextX + nextWidth > item.x && nextX < item.x + item.width)
+      .sort((a, b) => a.y - b.y);
+    for (let topIndex = 0; topIndex < verticalPeers.length; topIndex += 1) {
+      for (let bottomIndex = topIndex + 1; bottomIndex < verticalPeers.length; bottomIndex += 1) {
+        const top = verticalPeers[topIndex];
+        const bottom = verticalPeers[bottomIndex];
+        const topBottom = top.y + top.height;
+        const available = bottom.y - topBottom - nextHeight;
+        if (available < 0) continue;
+
+        const candidateY = topBottom + available / 2;
+        if (Math.abs(candidateY - nextY) > tolerance) continue;
+
+        snappedY = Math.round(candidateY);
+        guides.push({ axis: "y", position: topBottom });
+        guides.push({ axis: "y", position: bottom.y });
+        topIndex = verticalPeers.length;
+        break;
+      }
+    }
+
     return {
       x: Math.round(snappedX),
       y: Math.round(snappedY),
@@ -380,6 +435,90 @@ export function EditorShell({ project }: EditorShellProps) {
       height: Math.round(snappedHeight),
       guides,
     };
+  }
+
+  function getSpacingGuides(component: ResumeComponent, nextX: number, nextY: number, nextWidth = component.width, nextHeight = component.height) {
+    if (!smartGuidesEnabled) {
+      return [];
+    }
+
+    const moving = {
+      left: nextX,
+      right: nextX + nextWidth,
+      top: nextY,
+      bottom: nextY + nextHeight,
+      midX: nextX + nextWidth / 2,
+      midY: nextY + nextHeight / 2,
+    };
+    const otherComponents = components.filter((item) => item.id !== component.id && !item.props.popupId);
+    const horizontalRaw: SpacingGuide[] = [];
+
+    for (const item of otherComponents) {
+      if (!(moving.bottom > item.y && moving.top < item.y + item.height)) {
+        continue;
+      }
+
+      const itemRightToMovingLeft = moving.left - (item.x + item.width);
+      const movingRightToItemLeft = item.x - moving.right;
+      const cross = Math.round((Math.max(moving.top, item.y) + Math.min(moving.bottom, item.y + item.height)) / 2);
+
+      if (itemRightToMovingLeft >= 0) {
+        horizontalRaw.push({
+          axis: "x",
+          start: item.x + item.width,
+          end: moving.left,
+          cross,
+          distance: Math.round(itemRightToMovingLeft),
+        });
+      }
+
+      if (movingRightToItemLeft >= 0) {
+        horizontalRaw.push({
+          axis: "x",
+          start: moving.right,
+          end: item.x,
+          cross,
+          distance: Math.round(movingRightToItemLeft),
+        });
+      }
+    }
+
+    const horizontal: SpacingGuide[] = [...horizontalRaw].sort((a, b) => a.distance - b.distance);
+    const verticalRaw: SpacingGuide[] = [];
+
+    for (const item of otherComponents) {
+      if (!(moving.right > item.x && moving.left < item.x + item.width)) {
+        continue;
+      }
+
+      const itemBottomToMovingTop = moving.top - (item.y + item.height);
+      const movingBottomToItemTop = item.y - moving.bottom;
+      const cross = Math.round((Math.max(moving.left, item.x) + Math.min(moving.right, item.x + item.width)) / 2);
+
+      if (itemBottomToMovingTop >= 0) {
+        verticalRaw.push({
+          axis: "y",
+          start: item.y + item.height,
+          end: moving.top,
+          cross,
+          distance: Math.round(itemBottomToMovingTop),
+        });
+      }
+
+      if (movingBottomToItemTop >= 0) {
+        verticalRaw.push({
+          axis: "y",
+          start: moving.bottom,
+          end: item.y,
+          cross,
+          distance: Math.round(movingBottomToItemTop),
+        });
+      }
+    }
+
+    const vertical: SpacingGuide[] = [...verticalRaw].sort((a, b) => a.distance - b.distance);
+
+    return [horizontal[0], vertical[0]].filter((guide): guide is SpacingGuide => Boolean(guide));
   }
 
   function handleDragMove(event: DragMoveEvent) {
@@ -390,6 +529,7 @@ export function EditorShell({ project }: EditorShellProps) {
 
     const snap = getSmartSnap(component, component.x + event.delta.x, component.y + event.delta.y);
     setGuideLines(snap.guides);
+    setSpacingGuides(getSpacingGuides(component, snap.x, snap.y));
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -402,7 +542,11 @@ export function EditorShell({ project }: EditorShellProps) {
 
     const snap = getSmartSnap(component, component.x + delta.x, component.y + delta.y);
     setGuideLines(snap.guides);
-    window.setTimeout(() => setGuideLines([]), 450);
+    setSpacingGuides(getSpacingGuides(component, snap.x, snap.y));
+    window.setTimeout(() => {
+      setGuideLines([]);
+      setSpacingGuides([]);
+    }, 450);
     updateComponent(component.id, {
       x: snap.x,
       y: snap.y,
@@ -418,6 +562,7 @@ export function EditorShell({ project }: EditorShellProps) {
     const nextHeight = Math.max(36, component.height + deltaHeight);
     const snap = getSmartSnap(component, component.x, component.y, nextWidth, nextHeight);
     setGuideLines(snap.guides);
+    setSpacingGuides(getSpacingGuides(component, component.x, component.y, snap.width, snap.height));
     updateComponent(component.id, {
       width: snap.width,
       height: snap.height,
@@ -707,7 +852,10 @@ export function EditorShell({ project }: EditorShellProps) {
             sensors={sensors}
             onDragMove={handleDragMove}
             onDragEnd={handleDragEnd}
-            onDragCancel={() => setGuideLines([])}
+            onDragCancel={() => {
+              setGuideLines([]);
+              setSpacingGuides([]);
+            }}
           >
             <div
               id="resume-canvas"
@@ -787,6 +935,48 @@ export function EditorShell({ project }: EditorShellProps) {
                       : { top: guide.position, left: 0, right: 0, borderTopWidth: 1, borderStyle: "dashed" }
                   }
                 />
+              ))}
+              {spacingGuides.map((guide, index) => (
+                <div
+                  key={`${guide.axis}-${guide.start}-${guide.end}-${index}`}
+                  className="pointer-events-none absolute z-30"
+                  style={
+                    guide.axis === "x"
+                      ? {
+                          left: Math.min(guide.start, guide.end),
+                          top: guide.cross,
+                          width: Math.abs(guide.end - guide.start),
+                          height: 1,
+                          borderTop: "1px solid #10b981",
+                        }
+                      : {
+                          left: guide.cross,
+                          top: Math.min(guide.start, guide.end),
+                          width: 1,
+                          height: Math.abs(guide.end - guide.start),
+                          borderLeft: "1px solid #10b981",
+                        }
+                  }
+                >
+                  <span
+                    className="absolute rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm"
+                    style={
+                      guide.axis === "x"
+                        ? {
+                            left: "50%",
+                            top: -18,
+                            transform: "translateX(-50%)",
+                          }
+                        : {
+                            left: 6,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                          }
+                    }
+                  >
+                    {guide.distance}px
+                  </span>
+                </div>
               ))}
               {popupComponent ? (
                 <PopupOverlay
@@ -1349,12 +1539,8 @@ function CanvasComponent({
               alt=""
               className="h-32 w-full object-cover"
             />
-          ) : (
-            <div className="flex h-32 w-full items-center justify-center bg-zinc-100 text-xs font-medium text-zinc-400">
-              Thumbnail
-            </div>
-          )}
-          <span className="px-3 pt-3 text-sm font-semibold text-zinc-950">
+          ) : null}
+          <span className={cn("px-3 text-sm font-semibold text-zinc-950", component.props.thumbnailUrl ? "pt-3" : "pt-4")}>
             {component.content ?? "Popup title"}
           </span>
           <span className="line-clamp-2 px-3 pb-3 pt-1 text-xs leading-5 text-zinc-500">
@@ -1916,6 +2102,23 @@ function PropertyPanel({
                 className="h-9 w-full rounded-md border border-zinc-200"
               />
             </label>
+            {selectedComponent.type === "text" ? (
+              <label className="flex items-center gap-2 rounded-md bg-zinc-50 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={!selectedComponent.props.backgroundColor}
+                  onChange={(event) =>
+                    onUpdate(selectedComponent.id, {
+                      props: {
+                        ...selectedComponent.props,
+                        backgroundColor: event.target.checked ? null : "#ffffff",
+                      },
+                    })
+                  }
+                />
+                <span className="text-sm font-medium text-zinc-700">Transparent background</span>
+              </label>
+            ) : null}
             {selectedComponent.type === "section" ||
             selectedComponent.type === "container" ||
             selectedComponent.type === "image" ||
