@@ -13,7 +13,8 @@ export type ComponentType =
   | "divider"
   | "spacer"
   | "section"
-  | "container";
+  | "container"
+  | "popup";
 
 export type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 
@@ -47,6 +48,7 @@ export interface ResumePage {
   slug: string;
   title: string;
   order: number;
+  canvasBackground?: string;
   sections: ResumeSection[];
 }
 

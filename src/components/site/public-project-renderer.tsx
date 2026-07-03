@@ -1,4 +1,6 @@
-import type { CSSProperties } from "react";
+"use client";
+
+import { useState, type CSSProperties } from "react";
 import type { ResumeComponent, ResumePage, ResumeProject } from "@/types/project";
 
 export function PublicProjectRenderer({
@@ -9,18 +11,24 @@ export function PublicProjectRenderer({
   page: ResumePage;
 }) {
   const isScrollMode = project.navigationMode === "scroll";
+  const [openPopupId, setOpenPopupId] = useState<string | null>(null);
   const pageLayouts = getPageLayouts(isScrollMode ? project.pages : [page]);
   const components = pageLayouts.flatMap((layout) =>
     layout.components.map((component) => ({
       component,
       displayTop: component.y + layout.offset + (isScrollMode ? 44 : 0),
     })),
-  );
+  ).filter(({ component }) => !component.props.popupId);
+  const allComponents = pageLayouts.flatMap((layout) => layout.components);
+  const openPopup = allComponents.find((component) => component.id === openPopupId && component.type === "popup");
+  const popupChildren = openPopupId
+    ? allComponents.filter((component) => component.props.popupId === openPopupId)
+    : [];
   const canvasHeight = Math.max(860, pageLayouts.at(-1) ? pageLayouts.at(-1)!.offset + pageLayouts.at(-1)!.height : 860);
 
   return (
     <main className="min-h-screen bg-white text-zinc-950">
-      <header className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-4">
+      <header className="mx-auto flex h-16 w-full max-w-[920px] items-center justify-between px-3 sm:px-4">
         <a href={isScrollMode ? "#" : `/${project.slug}`} className="font-semibold hover:text-emerald-700">
           {project.title}
         </a>
@@ -40,7 +48,7 @@ export function PublicProjectRenderer({
         </nav>
         )}
       </header>
-      <section className="relative mx-auto w-full max-w-5xl px-4" style={{ minHeight: canvasHeight }}>
+      <section className="relative mx-auto w-full max-w-[840px] px-2 sm:px-0" style={{ minHeight: canvasHeight }}>
         {isScrollMode
           ? pageLayouts.map((layout) => {
               const navItem = project.navigation.find((item) => item.target === layout.page.slug);
@@ -60,15 +68,35 @@ export function PublicProjectRenderer({
             })
           : null}
         {components.map(({ component, displayTop }) => (
-          <PublicComponent key={component.id} component={component} displayTop={displayTop} />
+          <PublicComponent
+            key={component.id}
+            component={component}
+            displayTop={displayTop}
+            onOpenPopup={() => setOpenPopupId(component.id)}
+          />
         ))}
+        {openPopup ? (
+          <PublicPopupOverlay
+            popup={openPopup}
+            components={popupChildren}
+            onClose={() => setOpenPopupId(null)}
+          />
+        ) : null}
       </section>
       {isScrollMode && project.navigation.length > 0 ? <PublicToc navigation={project.navigation} /> : null}
     </main>
   );
 }
 
-function PublicComponent({ component, displayTop }: { component: ResumeComponent; displayTop: number }) {
+function PublicComponent({
+  component,
+  displayTop,
+  onOpenPopup,
+}: {
+  component: ResumeComponent;
+  displayTop: number;
+  onOpenPopup?: () => void;
+}) {
   return (
     <div
       className="absolute rounded-md"
@@ -107,7 +135,14 @@ function PublicComponent({ component, displayTop }: { component: ResumeComponent
           }}
         />
       ) : component.type === "button" ? (
-        <button type="button" className="h-full w-full rounded-md bg-zinc-950 px-4 text-sm font-medium text-white">
+        <button
+          type="button"
+          className="h-full w-full rounded-md bg-zinc-950 px-4 text-sm font-medium text-white"
+          style={{
+            backgroundColor: String(component.props.backgroundColor ?? "#09090b"),
+            color: String(component.props.color ?? "#ffffff"),
+          }}
+        >
           {component.content ?? "버튼"}
         </button>
       ) : component.type === "link" ? (
@@ -116,9 +151,33 @@ function PublicComponent({ component, displayTop }: { component: ResumeComponent
           target="_blank"
           rel="noreferrer"
           className="flex h-full w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
+          style={{
+            backgroundColor: String(component.props.backgroundColor ?? "#ffffff"),
+            color: String(component.props.color ?? "#18181b"),
+          }}
         >
           {component.content ?? "링크"}
         </a>
+      ) : component.type === "popup" ? (
+        <button
+          type="button"
+          onClick={onOpenPopup}
+          className="flex h-full w-full flex-col overflow-hidden rounded-md border border-zinc-200 bg-white text-left shadow-sm"
+          style={{ backgroundColor: String(component.props.backgroundColor ?? "#ffffff") }}
+        >
+          {component.props.thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={String(component.props.thumbnailUrl)} alt="" className="h-32 w-full object-cover" />
+          ) : (
+            <div className="flex h-32 w-full items-center justify-center bg-zinc-100 text-xs font-medium text-zinc-400">
+              Thumbnail
+            </div>
+          )}
+          <span className="px-3 pt-3 text-sm font-semibold text-zinc-950">{component.content ?? "Popup title"}</span>
+          <span className="line-clamp-2 px-3 pb-3 pt-1 text-xs leading-5 text-zinc-500">
+            {String(component.props.description ?? "")}
+          </span>
+        </button>
       ) : component.type === "section" || component.type === "container" ? (
         <div
           id={component.type === "section" ? normalizeAnchor(component.content ?? component.id) : undefined}
@@ -133,6 +192,39 @@ function PublicComponent({ component, displayTop }: { component: ResumeComponent
       ) : (
         <div className="flex h-full items-center justify-center bg-zinc-100 text-sm text-zinc-500">{component.type}</div>
       )}
+    </div>
+  );
+}
+
+function PublicPopupOverlay({
+  popup,
+  components,
+  onClose,
+}: {
+  popup: ResumeComponent;
+  components: ResumeComponent[];
+  onClose: () => void;
+}) {
+  const overlayHeight = Math.max(560, ...components.map((component) => component.y + component.height + 120));
+
+  return (
+    <div className="fixed inset-x-3 top-20 z-50 mx-auto max-h-[78vh] max-w-[840px] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-2xl sm:inset-x-6">
+      <div className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-zinc-100 bg-white px-5">
+        <div>
+          <p className="text-sm font-semibold">{popup.content ?? "Popup title"}</p>
+          <p className="text-xs text-zinc-500">{String(popup.props.description ?? "")}</p>
+        </div>
+        <button type="button" onClick={onClose} className="inline-flex size-8 items-center justify-center rounded-md hover:bg-zinc-100">
+          ×
+        </button>
+      </div>
+      <div className="relative overflow-y-auto" style={{ height: "calc(78vh - 56px)" }}>
+        <div className="relative" style={{ minHeight: overlayHeight }}>
+          {components.map((component) => (
+            <PublicComponent key={component.id} component={component} displayTop={component.y} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

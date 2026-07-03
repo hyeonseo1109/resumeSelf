@@ -16,4 +16,5 @@ export const insertableComponents: InsertableComponent[] = [
   { type: "spacer", label: "Spacer", description: "여백 조정" },
   { type: "section", label: "Section", description: "스크롤/라우팅 대상 구역" },
   { type: "container", label: "Container", description: "컴포넌트 그룹" },
+  { type: "popup", label: "Popup", description: "썸네일을 눌러 여는 상세 폴더" },
 ];

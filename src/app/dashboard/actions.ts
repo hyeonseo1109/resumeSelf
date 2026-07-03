@@ -72,7 +72,7 @@ function buildInitialPages(mode: ProjectMode, navigation: NavigationItem[]): Res
   });
 }
 
-async function resolveAvailableSlug(baseSlug: string) {
+async function resolveAvailableSlug(baseSlug: string, excludeProjectId?: string) {
   const supabase = await createClient();
 
   if (!supabase) {
@@ -84,7 +84,7 @@ async function resolveAvailableSlug(baseSlug: string) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const { data } = await supabase.from("projects").select("id").eq("slug", candidate).maybeSingle();
 
-    if (!data) {
+    if (!data || data.id === excludeProjectId) {
       return candidate;
     }
 
@@ -261,6 +261,40 @@ export async function deleteProjectAction(formData: FormData) {
   const { error } = await supabase
     .from("projects")
     .delete()
+    .eq("id", projectId)
+    .eq("owner_id", user.id);
+
+  if (error) {
+    redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/dashboard");
+}
+
+export async function updateProjectSlugAction(formData: FormData) {
+  const projectId = String(formData.get("projectId") ?? "");
+  const rawSlug = String(formData.get("slug") ?? "").trim();
+  const supabase = await createClient();
+
+  if (!supabase) {
+    redirect("/dashboard?error=supabase-not-configured");
+  }
+
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) {
+    redirect("/dashboard?error=login-required");
+  }
+
+  if (!projectId || !rawSlug) {
+    redirect("/dashboard?error=missing-slug");
+  }
+
+  const nextSlug = await resolveAvailableSlug(createSlugCandidate(rawSlug), projectId);
+  const { error } = await supabase
+    .from("projects")
+    .update({ slug: nextSlug })
     .eq("id", projectId)
     .eq("owner_id", user.id);
 

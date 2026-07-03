@@ -41,13 +41,17 @@ interface EditorState {
   project: ResumeProject;
   activePageId: string;
   selectedComponentId: string | null;
+  openPopupId: string | null;
   saveStatus: SaveStatus;
   mode: "edit" | "preview";
   setActivePage: (id: string) => void;
   selectComponent: (id: string | null) => void;
+  setOpenPopup: (id: string | null) => void;
   addComponent: (type: ComponentType) => void;
+  addComponentAt: (type: ComponentType, position: { x: number; y: number }) => void;
   updateComponent: (id: string, patch: Partial<ResumeComponent>) => void;
   removeComponent: (id: string) => void;
+  updateCanvasBackground: (color: string) => void;
   addNavigationPage: () => void;
   updateNavigationItem: (id: string, patch: { label?: string; target?: string }) => void;
   removeNavigationPage: (id: string) => void;
@@ -59,105 +63,166 @@ interface EditorState {
   markSaveError: () => void;
 }
 
+function getComponentSize(type: ComponentType) {
+  return {
+    width:
+      type === "divider"
+        ? 520
+        : type === "section" || type === "container"
+          ? 620
+          : type === "popup"
+            ? 320
+            : 360,
+    height:
+      type === "text"
+        ? 96
+        : type === "section"
+          ? 320
+          : type === "container"
+            ? 220
+            : type === "popup"
+              ? 220
+              : 140,
+  };
+}
+
+function buildComponent(type: ComponentType, position: { x: number; y: number }, popupId?: string | null): ResumeComponent {
+  const size = getComponentSize(type);
+  const component: ResumeComponent = {
+    id: crypto.randomUUID(),
+    type,
+    x: popupId && type !== "popup" ? 40 : position.x,
+    y: popupId && type !== "popup" ? 96 : position.y,
+    width: size.width,
+    height: size.height,
+    content:
+      type === "text"
+        ? "새 텍스트를 입력하세요"
+        : type === "button"
+          ? "버튼"
+          : type === "link"
+            ? "링크"
+            : type === "section"
+              ? "Section"
+              : type === "container"
+                ? "Container"
+                : type === "popup"
+                  ? "Popup title"
+                  : undefined,
+    props:
+      type === "link"
+        ? { href: "https://example.com" }
+        : type === "image"
+          ? { objectFit: "cover", objectPositionX: 50, objectPositionY: 50 }
+          : type === "section" || type === "container"
+            ? { backgroundColor: "#f8fafc", borderColor: "#d4d4d8" }
+            : type === "popup"
+              ? {
+                  description: "클릭하면 자세한 내용을 볼 수 있습니다.",
+                  thumbnailUrl: "",
+                  backgroundColor: "#ffffff",
+                }
+              : {},
+  };
+
+  return popupId && type !== "popup"
+    ? { ...component, props: { ...component.props, popupId } }
+    : component;
+}
+
+function addComponentToState(
+  state: EditorState,
+  type: ComponentType,
+  position: { x: number; y: number } = { x: 96, y: 120 },
+): Partial<EditorState> {
+  if (state.project.navigationMode === "scroll" && type === "section") {
+    const label = getNextPageLabel(state.project.navigation.map((item) => item.label));
+    const target = createUniqueTarget(label, state.project.navigation.map((item) => item.target));
+    const pageId = crypto.randomUUID();
+    const navId = crypto.randomUUID();
+    const order = state.project.navigation.length;
+
+    return {
+      saveStatus: "dirty",
+      activePageId: pageId,
+      selectedComponentId: null,
+      project: {
+        ...state.project,
+        navigation: [...state.project.navigation, { id: navId, label, target, order }],
+        pages: [
+          ...state.project.pages,
+          {
+            id: pageId,
+            slug: target,
+            title: label,
+            order,
+            canvasBackground: state.project.pages[0]?.canvasBackground,
+            sections: [
+              {
+                id: crypto.randomUUID(),
+                title: label,
+                order: 0,
+                components: [],
+              },
+            ],
+          },
+        ],
+      },
+    };
+  }
+
+  const component = buildComponent(type, position, state.openPopupId);
+  const activePage = state.project.pages.find((page) => page.id === state.activePageId) ?? state.project.pages[0];
+
+  return {
+    saveStatus: "dirty",
+    selectedComponentId: component.id,
+    project: {
+      ...state.project,
+      pages: state.project.pages.map((page) =>
+        page.id === activePage.id
+          ? {
+              ...page,
+              sections: page.sections.map((section, index) =>
+                index === 0 ? { ...section, components: [...section.components, component] } : section,
+              ),
+            }
+          : page,
+      ),
+    },
+  };
+}
+
 export function createEditorStore(initialProject: ResumeProject) {
   return create<EditorState>((set) => ({
     project: initialProject,
     activePageId: initialProject.pages[0]?.id ?? "",
     selectedComponentId: null,
+    openPopupId: null,
     saveStatus: "idle",
     mode: "edit",
     setActivePage: (id) => set({ activePageId: id, selectedComponentId: null }),
     selectComponent: (id) => set({ selectedComponentId: id }),
+    setOpenPopup: (id) => set({ openPopupId: id }),
     setMode: (mode) => set({ mode }),
     markSaving: () => set({ saveStatus: "saving" }),
     markSaved: () => set({ saveStatus: "saved" }),
     markSaveError: () => set({ saveStatus: "error" }),
     addComponent: (type) =>
-      set((state) => {
-        if (state.project.navigationMode === "scroll" && type === "section") {
-          const label = getNextPageLabel(state.project.navigation.map((item) => item.label));
-          const target = createUniqueTarget(label, state.project.navigation.map((item) => item.target));
-          const pageId = crypto.randomUUID();
-          const navId = crypto.randomUUID();
-          const order = state.project.navigation.length;
-
-          return {
-            saveStatus: "dirty",
-            activePageId: pageId,
-            selectedComponentId: null,
-            project: {
-              ...state.project,
-              navigation: [...state.project.navigation, { id: navId, label, target, order }],
-              pages: [
-                ...state.project.pages,
-                {
-                  id: pageId,
-                  slug: target,
-                  title: label,
-                  order,
-                  sections: [
-                    {
-                      id: crypto.randomUUID(),
-                      title: label,
-                      order: 0,
-                      components: [],
-                    },
-                  ],
-                },
-              ],
-            },
-          };
-        }
-
-        const component: ResumeComponent = {
-          id: crypto.randomUUID(),
-          type,
-          x: 96,
-          y: 120,
-          width: type === "divider" ? 520 : type === "section" || type === "container" ? 620 : 360,
-          height: type === "text" ? 96 : type === "section" ? 320 : type === "container" ? 220 : 140,
-          content:
-            type === "text"
-              ? "새 텍스트를 입력하세요"
-              : type === "button"
-                ? "버튼"
-                : type === "link"
-                  ? "링크"
-                  : type === "section"
-                    ? "Section"
-                    : type === "container"
-                      ? "Container"
-                  : undefined,
-          props:
-            type === "link"
-              ? { href: "https://example.com" }
-              : type === "image"
-                ? { objectFit: "cover", objectPositionX: 50, objectPositionY: 50 }
-                : type === "section" || type === "container"
-                  ? { backgroundColor: "#f8fafc", borderColor: "#d4d4d8" }
-                  : {},
-        };
-
-        const activePage = state.project.pages.find((page) => page.id === state.activePageId) ?? state.project.pages[0];
-
-        return {
-          saveStatus: "dirty",
-          selectedComponentId: component.id,
-          project: {
-            ...state.project,
-            pages: state.project.pages.map((page) =>
-              page.id === activePage.id
-                ? {
-                ...page,
-                    sections: page.sections.map((section, index) =>
-                      index === 0 ? { ...section, components: [...section.components, component] } : section,
-                    ),
-                  }
-                : page,
-            ),
-          },
-        };
-      }),
+      set((state) => addComponentToState(state, type, undefined)),
+    addComponentAt: (type, position) =>
+      set((state) => addComponentToState(state, type, position)),
+    updateCanvasBackground: (color) =>
+      set((state) => ({
+        saveStatus: "dirty",
+        project: {
+          ...state.project,
+          pages: state.project.pages.map((page) => ({
+            ...page,
+            canvasBackground: color,
+          })),
+        },
+      })),
     updateComponent: (id, patch) =>
       set((state) => {
         const sourceComponent = state.project.pages
@@ -166,7 +231,9 @@ export function createEditorStore(initialProject: ResumeProject) {
           .find((component) => component.id === id);
         const deltaX = typeof patch.x === "number" && sourceComponent ? patch.x - sourceComponent.x : 0;
         const deltaY = typeof patch.y === "number" && sourceComponent ? patch.y - sourceComponent.y : 0;
-        const shouldMoveChildren = sourceComponent?.type === "section" && (deltaX !== 0 || deltaY !== 0);
+        const shouldMoveChildren =
+          (sourceComponent?.type === "section" || sourceComponent?.type === "container") &&
+          (deltaX !== 0 || deltaY !== 0);
 
         return {
           saveStatus: "dirty",
@@ -184,6 +251,7 @@ export function createEditorStore(initialProject: ResumeProject) {
                   if (
                     shouldMoveChildren &&
                     sourceComponent &&
+                    component.id !== sourceComponent.id &&
                     component.x >= sourceComponent.x &&
                     component.y >= sourceComponent.y &&
                     component.x + component.width <= sourceComponent.x + sourceComponent.width &&

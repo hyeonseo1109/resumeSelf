@@ -1,6 +1,6 @@
 "use client";
 
-import { DndContext, type DragEndEvent, useDraggable } from "@dnd-kit/core";
+import { DndContext, type DragEndEvent, type DragMoveEvent, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
   ChevronDown,
@@ -8,6 +8,8 @@ import {
   Eye,
   LayoutDashboard,
   Link2,
+  Magnet,
+  Move,
   Pencil,
   Plus,
   Save,
@@ -28,13 +30,22 @@ interface EditorShellProps {
   project: ResumeProject;
 }
 
+interface GuideLine {
+  axis: "x" | "y";
+  position: number;
+}
+
 export function EditorShell({ project }: EditorShellProps) {
   const store = useMemo(() => createEditorStore(project), [project]);
   const editorProject = useStore(store, (state) => state.project);
   const activePageId = useStore(store, (state) => state.activePageId);
   const setActivePage = useStore(store, (state) => state.setActivePage);
-  const addComponent = useStore(store, (state) => state.addComponent);
+  const addComponentAt = useStore(store, (state) => state.addComponentAt);
   const updateComponent = useStore(store, (state) => state.updateComponent);
+  const updateCanvasBackground = useStore(
+    store,
+    (state) => state.updateCanvasBackground,
+  );
   const removeComponent = useStore(store, (state) => state.removeComponent);
   const addNavigationPage = useStore(store, (state) => state.addNavigationPage);
   const updateNavigationItem = useStore(
@@ -51,6 +62,8 @@ export function EditorShell({ project }: EditorShellProps) {
     store,
     (state) => state.selectedComponentId,
   );
+  const openPopupId = useStore(store, (state) => state.openPopupId);
+  const setOpenPopup = useStore(store, (state) => state.setOpenPopup);
   const selectComponent = useStore(store, (state) => state.selectComponent);
   const saveStatus = useStore(store, (state) => state.saveStatus);
   const markSaving = useStore(store, (state) => state.markSaving);
@@ -64,6 +77,8 @@ export function EditorShell({ project }: EditorShellProps) {
   const [activeTocTarget, setActiveTocTarget] = useState(
     editorProject.navigation[0]?.target ?? "",
   );
+  const [smartGuidesEnabled, setSmartGuidesEnabled] = useState(true);
+  const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
   const scrollAreaRef = useRef<HTMLElement | null>(null);
   const projectRef = useRef(editorProject);
   const saveStatusRef = useRef(saveStatus);
@@ -106,7 +121,7 @@ export function EditorShell({ project }: EditorShellProps) {
       return [...layouts, layout];
     }, []);
   }, [editorProject.pages]);
-  const renderItems = isScrollMode
+  const renderItems = (isScrollMode
     ? pageLayouts.flatMap((layout) =>
         layout.components.map((component) => ({
           component,
@@ -116,8 +131,15 @@ export function EditorShell({ project }: EditorShellProps) {
     : activePageComponents.map((component) => ({
         component,
         displayTop: component.y,
-      }));
+      })))
+    .filter(({ component }) => !component.props.popupId)
+    .sort((a, b) => getComponentLayer(a.component) - getComponentLayer(b.component));
   const components = isScrollMode ? allComponents : activePageComponents;
+  const popupComponent =
+    components.find((component) => component.id === openPopupId && component.type === "popup") ?? null;
+  const popupChildren = openPopupId
+    ? components.filter((component) => component.props.popupId === openPopupId)
+    : [];
   const selectedComponent =
     components.find((component) => component.id === selectedComponentId) ??
     null;
@@ -134,6 +156,7 @@ export function EditorShell({ project }: EditorShellProps) {
           (component) => component.y + component.height + 160,
         ),
       );
+  const canvasBackground = activePage?.canvasBackground ?? editorProject.pages[0]?.canvasBackground ?? "#ffffff";
 
   useEffect(() => {
     projectRef.current = editorProject;
@@ -246,6 +269,78 @@ export function EditorShell({ project }: EditorShellProps) {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
+  function getSmartSnap(component: ResumeComponent, nextX: number, nextY: number, nextWidth = component.width, nextHeight = component.height) {
+    if (!smartGuidesEnabled) {
+      return { x: Math.round(nextX), y: Math.round(nextY), width: Math.round(nextWidth), height: Math.round(nextHeight), guides: [] as GuideLine[] };
+    }
+
+    const tolerance = 7;
+    const guides: GuideLine[] = [];
+    let snappedX = nextX;
+    let snappedY = nextY;
+    let snappedWidth = nextWidth;
+    let snappedHeight = nextHeight;
+    const canvasTargetsX = [0, 420, 840];
+    const canvasTargetsY = [64, canvasHeight / 2, canvasHeight];
+    const otherComponents = components.filter((item) => item.id !== component.id && !item.props.popupId);
+    const xTargets = [
+      ...canvasTargetsX,
+      ...otherComponents.flatMap((item) => [item.x, item.x + item.width / 2, item.x + item.width]),
+    ];
+    const yTargets = [
+      ...canvasTargetsY,
+      ...otherComponents.flatMap((item) => [item.y, item.y + item.height / 2, item.y + item.height]),
+    ];
+    const xPoints = [
+      { kind: "left", value: nextX },
+      { kind: "center", value: nextX + nextWidth / 2 },
+      { kind: "right", value: nextX + nextWidth },
+    ];
+    const yPoints = [
+      { kind: "top", value: nextY },
+      { kind: "middle", value: nextY + nextHeight / 2 },
+      { kind: "bottom", value: nextY + nextHeight },
+    ];
+
+    for (const target of xTargets) {
+      const match = xPoints.find((point) => Math.abs(point.value - target) <= tolerance);
+      if (!match) continue;
+      guides.push({ axis: "x", position: target });
+      if (match.kind === "left") snappedX = target;
+      if (match.kind === "center") snappedX = target - nextWidth / 2;
+      if (match.kind === "right") snappedWidth = Math.max(48, target - nextX);
+      break;
+    }
+
+    for (const target of yTargets) {
+      const match = yPoints.find((point) => Math.abs(point.value - target) <= tolerance);
+      if (!match) continue;
+      guides.push({ axis: "y", position: target });
+      if (match.kind === "top") snappedY = target;
+      if (match.kind === "middle") snappedY = target - nextHeight / 2;
+      if (match.kind === "bottom") snappedHeight = Math.max(36, target - nextY);
+      break;
+    }
+
+    return {
+      x: Math.round(snappedX),
+      y: Math.round(snappedY),
+      width: Math.round(snappedWidth),
+      height: Math.round(snappedHeight),
+      guides,
+    };
+  }
+
+  function handleDragMove(event: DragMoveEvent) {
+    const component = components.find((item) => item.id === event.active.id);
+    if (!component || !smartGuidesEnabled) {
+      return;
+    }
+
+    const snap = getSmartSnap(component, component.x + event.delta.x, component.y + event.delta.y);
+    setGuideLines(snap.guides);
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, delta } = event;
     const component = components.find((item) => item.id === active.id);
@@ -254,9 +349,12 @@ export function EditorShell({ project }: EditorShellProps) {
       return;
     }
 
+    const snap = getSmartSnap(component, component.x + delta.x, component.y + delta.y);
+    setGuideLines(snap.guides);
+    window.setTimeout(() => setGuideLines([]), 450);
     updateComponent(component.id, {
-      x: Math.round(component.x + delta.x),
-      y: Math.round(component.y + delta.y),
+      x: snap.x,
+      y: snap.y,
     });
   }
 
@@ -265,10 +363,36 @@ export function EditorShell({ project }: EditorShellProps) {
     deltaWidth: number,
     deltaHeight: number,
   ) {
+    const nextWidth = Math.max(48, component.width + deltaWidth);
+    const nextHeight = Math.max(36, component.height + deltaHeight);
+    const snap = getSmartSnap(component, component.x, component.y, nextWidth, nextHeight);
+    setGuideLines(snap.guides);
     updateComponent(component.id, {
-      width: Math.max(48, Math.round(component.width + deltaWidth)),
-      height: Math.max(36, Math.round(component.height + deltaHeight)),
+      width: snap.width,
+      height: snap.height,
     });
+  }
+
+  function addComponentToVisibleCenter(type: Parameters<typeof addComponentAt>[0]) {
+    const size =
+      type === "divider"
+        ? { width: 520, height: 140 }
+        : type === "section"
+          ? { width: 620, height: 320 }
+          : type === "container"
+            ? { width: 620, height: 220 }
+            : type === "popup"
+              ? { width: 320, height: 220 }
+              : type === "text"
+                ? { width: 360, height: 96 }
+                : { width: 360, height: 140 };
+    const scrollRoot = scrollAreaRef.current;
+    const visibleTop = scrollRoot?.scrollTop ?? 0;
+    const visibleHeight = scrollRoot?.clientHeight ?? 720;
+    const x = Math.max(24, Math.round(420 - size.width / 2));
+    const y = Math.max(88, Math.round(visibleTop + visibleHeight / 2 - size.height / 2));
+
+    addComponentAt(type, { x, y });
   }
 
   function handleHeaderNavigation(target: string) {
@@ -355,6 +479,17 @@ export function EditorShell({ project }: EditorShellProps) {
     }
 
     const component = components.find((item) => item.id === componentId);
+    if (component?.type === "popup") {
+      updateComponent(componentId, {
+        props: {
+          ...component.props,
+          thumbnailUrl: result.url,
+          thumbnailStoragePath: result.path ?? result.url,
+        },
+      });
+      return;
+    }
+
     updateComponent(componentId, {
       content: result.url,
       props: { ...component?.props, storagePath: result.path ?? result.url },
@@ -363,7 +498,7 @@ export function EditorShell({ project }: EditorShellProps) {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-100 text-zinc-950">
-      <header className="flex h-14 items-center justify-between border-b border-zinc-200 bg-white px-3">
+      <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-zinc-200 bg-white px-3">
         <div className="flex items-center gap-2">
           <NextLink
             href="/dashboard"
@@ -401,6 +536,19 @@ export function EditorShell({ project }: EditorShellProps) {
                     ? "저장 실패"
                     : "저장됨"}
           </span>
+          <button
+            type="button"
+            onClick={() => setSmartGuidesEnabled((value) => !value)}
+            className={cn(
+              "inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm",
+              smartGuidesEnabled
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-zinc-200 bg-white text-zinc-500",
+            )}
+          >
+            <Magnet className="size-4" />
+            Snap
+          </button>
           <button
             type="button"
             onClick={() => void saveProject()}
@@ -475,7 +623,7 @@ export function EditorShell({ project }: EditorShellProps) {
                 <button
                   key={item.type}
                   type="button"
-                  onClick={() => addComponent(item.type)}
+                  onClick={() => addComponentToVisibleCenter(item.type)}
                   className="rounded-md border border-zinc-200 p-3 text-left transition hover:border-zinc-400 hover:bg-zinc-50"
                 >
                   <span className="block text-sm font-medium">
@@ -491,11 +639,15 @@ export function EditorShell({ project }: EditorShellProps) {
         ) : null}
 
         <main ref={scrollAreaRef} className="overflow-auto p-6">
-          <DndContext onDragEnd={handleDragEnd}>
+          <DndContext
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+            onDragCancel={() => setGuideLines([])}
+          >
             <div
               id="resume-canvas"
               className="relative mx-auto w-full max-w-[840px] bg-white shadow-sm ring-1 ring-zinc-200"
-              style={{ minHeight: canvasHeight }}
+              style={{ minHeight: canvasHeight, backgroundColor: canvasBackground }}
             >
               <SiteHeader
                 project={editorProject}
@@ -551,8 +703,36 @@ export function EditorShell({ project }: EditorShellProps) {
                   onResize={(deltaWidth, deltaHeight) =>
                     resizeComponent(component, deltaWidth, deltaHeight)
                   }
+                  onInlineTextChange={(content) =>
+                    updateComponent(component.id, { content })
+                  }
+                  onOpenPopup={() => setOpenPopup(component.id)}
                 />
               ))}
+              {guideLines.map((guide, index) => (
+                <div
+                  key={`${guide.axis}-${guide.position}-${index}`}
+                  className="pointer-events-none absolute z-30 border-emerald-500"
+                  style={
+                    guide.axis === "x"
+                      ? { left: guide.position, top: 0, bottom: 0, borderLeftWidth: 1, borderStyle: "dashed" }
+                      : { top: guide.position, left: 0, right: 0, borderTopWidth: 1, borderStyle: "dashed" }
+                  }
+                />
+              ))}
+              {popupComponent ? (
+                <PopupOverlay
+                  popup={popupComponent}
+                  childrenComponents={popupChildren}
+                  preview={mode === "preview"}
+                  selectedComponentId={selectedComponentId}
+                  onClose={() => setOpenPopup(null)}
+                  onSelect={selectComponent}
+                  onDelete={removeComponent}
+                  onResize={resizeComponent}
+                  onInlineTextChange={(id, content) => updateComponent(id, { content })}
+                />
+              ) : null}
             </div>
           </DndContext>
         </main>
@@ -566,6 +746,8 @@ export function EditorShell({ project }: EditorShellProps) {
             onUpload={uploadMedia}
             project={editorProject}
             onSetNavigationMode={setNavigationMode}
+            canvasBackground={canvasBackground}
+            onUpdateCanvasBackground={updateCanvasBackground}
           />
         ) : null}
       </div>
@@ -758,6 +940,22 @@ function SiteHeader({
   );
 }
 
+function getComponentLayer(component: ResumeComponent) {
+  if (component.type === "section") {
+    return 0;
+  }
+
+  if (component.type === "container") {
+    return 1;
+  }
+
+  if (component.type === "popup") {
+    return 6;
+  }
+
+  return 5;
+}
+
 function CanvasComponent({
   component,
   displayTop,
@@ -766,6 +964,8 @@ function CanvasComponent({
   onSelect,
   onDelete,
   onResize,
+  onInlineTextChange,
+  onOpenPopup,
 }: {
   component: ResumeComponent;
   displayTop: number;
@@ -774,11 +974,18 @@ function CanvasComponent({
   onSelect: () => void;
   onDelete: () => void;
   onResize: (deltaWidth: number, deltaHeight: number) => void;
+  onInlineTextChange: (content: string) => void;
+  onOpenPopup: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: component.id,
     disabled: preview,
   });
+  const [textDraft, setTextDraft] = useState(component.content ?? "");
+
+  useEffect(() => {
+    setTextDraft(component.content ?? "");
+  }, [component.content, component.id]);
 
   const style = {
     width: component.width,
@@ -786,9 +993,10 @@ function CanvasComponent({
     left: component.x,
     top: displayTop,
     transform: CSS.Translate.toString(transform),
-    zIndex:
-      component.type === "section" || component.type === "container" ? 0 : 5,
+    zIndex: getComponentLayer(component),
+    pointerEvents: component.type === "section" && !isSelected ? "none" : "auto",
   };
+  const wrapperDragProps = component.type === "text" ? {} : { ...listeners, ...attributes };
 
   function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -814,8 +1022,7 @@ function CanvasComponent({
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
+      {...wrapperDragProps}
       onMouseDown={(event) => {
         if (!preview) {
           event.stopPropagation();
@@ -844,12 +1051,27 @@ function CanvasComponent({
         </button>
       ) : null}
       {component.type === "text" ? (
-        <div
-          className="h-full w-full p-2 text-zinc-900"
-          style={component.props as CSSProperties}
-        >
-          {component.content}
-        </div>
+        <textarea
+          readOnly={preview}
+          value={textDraft}
+          onPointerDown={(event) => {
+            if (!preview) {
+              event.stopPropagation();
+              onSelect();
+            }
+          }}
+          onChange={(event) => setTextDraft(event.target.value)}
+          onBlur={() => {
+            if (textDraft !== (component.content ?? "")) {
+              onInlineTextChange(textDraft);
+            }
+          }}
+          className="h-full w-full resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-2 text-zinc-900 outline-none"
+          style={{
+            ...(component.props as CSSProperties),
+            backgroundColor: String(component.props.backgroundColor ?? "transparent"),
+          }}
+        />
       ) : component.type === "divider" ? (
         <div className="mt-4 border-t border-zinc-300" />
       ) : component.type === "image" && component.content ? (
@@ -881,6 +1103,10 @@ function CanvasComponent({
         <button
           type="button"
           className="h-full w-full rounded-md bg-zinc-950 px-4 text-sm font-medium text-white"
+          style={{
+            backgroundColor: String(component.props.backgroundColor ?? "#09090b"),
+            color: String(component.props.color ?? "#ffffff"),
+          }}
         >
           {component.content ?? "버튼"}
         </button>
@@ -895,9 +1121,44 @@ function CanvasComponent({
             }
           }}
           className="flex h-full w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
+          style={{
+            backgroundColor: String(component.props.backgroundColor ?? "#ffffff"),
+            color: String(component.props.color ?? "#18181b"),
+          }}
         >
           {component.content ?? "링크"}
         </a>
+      ) : component.type === "popup" ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenPopup();
+          }}
+          className="flex h-full w-full flex-col overflow-hidden rounded-md border border-zinc-200 bg-white text-left shadow-sm"
+          style={{
+            backgroundColor: String(component.props.backgroundColor ?? "#ffffff"),
+          }}
+        >
+          {component.props.thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={String(component.props.thumbnailUrl)}
+              alt=""
+              className="h-32 w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-32 w-full items-center justify-center bg-zinc-100 text-xs font-medium text-zinc-400">
+              Thumbnail
+            </div>
+          )}
+          <span className="px-3 pt-3 text-sm font-semibold text-zinc-950">
+            {component.content ?? "Popup title"}
+          </span>
+          <span className="line-clamp-2 px-3 pb-3 pt-1 text-xs leading-5 text-zinc-500">
+            {String(component.props.description ?? "클릭하면 자세한 내용을 볼 수 있습니다.")}
+          </span>
+        </button>
       ) : component.type === "section" || component.type === "container" ? (
         <div
           className="flex h-full w-full items-start rounded-md border border-dashed p-3 text-sm font-medium text-zinc-600"
@@ -929,6 +1190,77 @@ function CanvasComponent({
           aria-label="Resize component"
         />
       ) : null}
+    </div>
+  );
+}
+
+function PopupOverlay({
+  popup,
+  childrenComponents,
+  preview,
+  selectedComponentId,
+  onClose,
+  onSelect,
+  onDelete,
+  onResize,
+  onInlineTextChange,
+}: {
+  popup: ResumeComponent;
+  childrenComponents: ResumeComponent[];
+  preview: boolean;
+  selectedComponentId: string | null;
+  onClose: () => void;
+  onSelect: (id: string | null) => void;
+  onDelete: (id: string) => void;
+  onResize: (component: ResumeComponent, deltaWidth: number, deltaHeight: number) => void;
+  onInlineTextChange: (id: string, content: string) => void;
+}) {
+  const overlayHeight = Math.max(
+    560,
+    ...childrenComponents.map((component) => component.y + component.height + 120),
+  );
+
+  return (
+    <div className="absolute inset-x-10 top-24 z-40 max-h-[720px] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-2xl">
+      <div className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-zinc-100 bg-white px-5">
+        <div>
+          <p className="text-sm font-semibold text-zinc-950">{popup.content ?? "Popup title"}</p>
+          <p className="text-xs text-zinc-500">{String(popup.props.description ?? "")}</p>
+        </div>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onClose();
+          }}
+          className="inline-flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+      <div className="relative overflow-y-auto" style={{ height: 640 }}>
+        <div className="relative" style={{ minHeight: overlayHeight }}>
+          {childrenComponents.length === 0 ? (
+            <div className="absolute left-10 top-10 rounded-md border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-400">
+              Insert에서 컴포넌트를 추가하면 이 팝업 안에 들어갑니다.
+            </div>
+          ) : null}
+          {childrenComponents.map((component) => (
+            <CanvasComponent
+              key={component.id}
+              component={component}
+              displayTop={component.y}
+              preview={preview}
+              isSelected={selectedComponentId === component.id}
+              onSelect={() => onSelect(component.id)}
+              onDelete={() => onDelete(component.id)}
+              onResize={(deltaWidth, deltaHeight) => onResize(component, deltaWidth, deltaHeight)}
+              onInlineTextChange={(content) => onInlineTextChange(component.id, content)}
+              onOpenPopup={() => undefined}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1026,24 +1358,18 @@ function PropertyPanel({
             </div>
 
             {selectedComponent.type === "text" ? (
-              <label className="grid gap-1">
-                <span className="text-zinc-500">Text</span>
-                <textarea
-                  value={selectedComponent.content ?? ""}
-                  onChange={(event) =>
-                    onUpdate(selectedComponent.id, {
-                      content: event.target.value,
-                    })
-                  }
-                  className="min-h-28 rounded-md border border-zinc-200 p-2"
-                />
-              </label>
+              <div className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
+                텍스트 내용은 캔버스 안의 텍스트 박스를 직접 클릭해서 수정합니다.
+              </div>
             ) : null}
 
             {selectedComponent.type === "section" ||
-            selectedComponent.type === "container" ? (
+            selectedComponent.type === "container" ||
+            selectedComponent.type === "popup" ? (
               <label className="grid gap-1">
-                <span className="text-zinc-500">Label</span>
+                <span className="text-zinc-500">
+                  {selectedComponent.type === "popup" ? "Title" : "Label"}
+                </span>
                 <input
                   value={selectedComponent.content ?? ""}
                   onChange={(event) =>
@@ -1054,6 +1380,52 @@ function PropertyPanel({
                   className="h-9 rounded-md border border-zinc-200 px-2"
                 />
               </label>
+            ) : null}
+
+            {selectedComponent.type === "popup" ? (
+              <div className="grid gap-3">
+                <label className="grid gap-1">
+                  <span className="text-zinc-500">Description</span>
+                  <textarea
+                    value={String(selectedComponent.props.description ?? "")}
+                    onChange={(event) =>
+                      onUpdate(selectedComponent.id, {
+                        props: {
+                          ...selectedComponent.props,
+                          description: event.target.value,
+                        },
+                      })
+                    }
+                    className="min-h-20 rounded-md border border-zinc-200 p-2"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-zinc-500">Thumbnail Image</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={isUploading}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        void handleUpload(file, "image");
+                      }
+                    }}
+                    className="rounded-md border border-zinc-200 px-2 py-2 text-xs"
+                  />
+                  <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
+                    <Upload className="size-3.5" />
+                    {isUploading
+                      ? "업로드 중..."
+                      : selectedComponent.props.thumbnailUrl
+                        ? "썸네일 업로드됨"
+                        : "팝업 썸네일은 한 장만 사용합니다."}
+                  </span>
+                  {uploadError ? (
+                    <span className="text-xs text-red-600">{uploadError}</span>
+                  ) : null}
+                </label>
+              </div>
             ) : null}
 
             {selectedComponent.type === "image" ||
@@ -1236,6 +1608,22 @@ function PropertyPanel({
                 }
               />
             </div>
+            <label className="grid gap-1">
+              <span className="text-zinc-500">Background Color</span>
+              <input
+                type="color"
+                value={String(selectedComponent.props.backgroundColor ?? "#ffffff")}
+                onChange={(event) =>
+                  onUpdate(selectedComponent.id, {
+                    props: {
+                      ...selectedComponent.props,
+                      backgroundColor: event.target.value,
+                    },
+                  })
+                }
+                className="h-9 w-full rounded-md border border-zinc-200"
+              />
+            </label>
           </div>
         ) : (
           <div className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">

@@ -11,6 +11,7 @@ interface ProjectListProps {
   createAction: (formData: FormData) => void | Promise<void>;
   duplicateAction: (formData: FormData) => void | Promise<void>;
   deleteAction: (formData: FormData) => void | Promise<void>;
+  updateSlugAction: (formData: FormData) => void | Promise<void>;
 }
 
 export function ProjectList({
@@ -21,6 +22,7 @@ export function ProjectList({
   createAction,
   duplicateAction,
   deleteAction,
+  updateSlugAction,
 }: ProjectListProps) {
   const canCreate = canEdit && projects.length < limit;
 
@@ -48,7 +50,23 @@ export function ProjectList({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="font-semibold text-zinc-950">{project.title}</h2>
-                <p className="mt-1 text-sm text-zinc-500">/{project.slug}</p>
+                <form action={updateSlugAction} className="mt-2 flex max-w-sm items-center gap-2">
+                  <input type="hidden" name="projectId" value={project.id} />
+                  <span className="text-sm text-zinc-400">/</span>
+                  <input
+                    name="slug"
+                    defaultValue={project.slug}
+                    disabled={!canEdit}
+                    className="h-8 min-w-0 rounded-md border border-zinc-200 px-2 text-sm text-zinc-600 disabled:bg-zinc-50 disabled:text-zinc-300"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!canEdit}
+                    className="h-8 rounded-md border border-zinc-200 px-2 text-xs font-medium text-zinc-600 disabled:cursor-not-allowed disabled:text-zinc-300"
+                  >
+                    URL 저장
+                  </button>
+                </form>
               </div>
               <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700">
                 {project.mode}
