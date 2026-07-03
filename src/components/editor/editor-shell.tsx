@@ -12,6 +12,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   ChevronDown,
+  ChevronUp,
   Download,
   Eye,
   LayoutDashboard,
@@ -94,6 +95,7 @@ export function EditorShell({ project }: EditorShellProps) {
     store,
     (state) => state.removeNavigationPage,
   );
+  const moveNavigationPage = useStore(store, (state) => state.moveNavigationPage);
   const setHomePage = useStore(store, (state) => state.setHomePage);
   const setNavigationMode = useStore(store, (state) => state.setNavigationMode);
   const selectedComponentId = useStore(
@@ -577,6 +579,7 @@ export function EditorShell({ project }: EditorShellProps) {
               onAddNavigationPage={addNavigationPage}
               onUpdateNavigationItem={updateNavigationItem}
               onRemoveNavigationPage={removeNavigationPage}
+              onMoveNavigationPage={moveNavigationPage}
               onSetHomePage={setHomePage}
             />
           ) : null}
@@ -835,6 +838,7 @@ function RouteSwitcher({
   onAddNavigationPage,
   onUpdateNavigationItem,
   onRemoveNavigationPage,
+  onMoveNavigationPage,
   onSetHomePage,
 }: {
   project: ResumeProject;
@@ -846,6 +850,7 @@ function RouteSwitcher({
     patch: { label?: string; target?: string },
   ) => void;
   onRemoveNavigationPage: (id: string) => void;
+  onMoveNavigationPage: (id: string, direction: "up" | "down") => void;
   onSetHomePage: (id: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -896,6 +901,26 @@ function RouteSwitcher({
                   className="grid gap-2 rounded-md bg-zinc-50 p-2"
                 >
                   <div className="flex items-center gap-1">
+                    <div className="grid gap-1">
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => onMoveNavigationPage(item.id, "up")}
+                        className="inline-flex size-5 items-center justify-center rounded border border-zinc-200 text-zinc-400 disabled:opacity-30"
+                        aria-label="Move route up"
+                      >
+                        <ChevronUp className="size-3" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === project.navigation.length - 1}
+                        onClick={() => onMoveNavigationPage(item.id, "down")}
+                        className="inline-flex size-5 items-center justify-center rounded border border-zinc-200 text-zinc-400 disabled:opacity-30"
+                        aria-label="Move route down"
+                      >
+                        <ChevronDown className="size-3" />
+                      </button>
+                    </div>
                     <input
                       value={item.label}
                       onChange={(event) =>
@@ -1091,13 +1116,29 @@ function CanvasComponent({
   });
   const [textDraft, setTextDraft] = useState(component.content ?? "");
 
-  const style = {
+  const style: CSSProperties = {
     width: component.width,
     height: component.height,
     left: component.x,
     top: displayTop,
     transform: CSS.Translate.toString(transform),
     zIndex: getComponentLayer(component),
+    backgroundColor:
+      component.type === "image" || component.type === "video"
+        ? String(component.props.backgroundColor ?? "transparent")
+        : undefined,
+    borderColor:
+      component.type === "image" || component.type === "video"
+        ? String(component.props.borderColor ?? "transparent")
+        : undefined,
+    borderStyle:
+      component.type === "image" || component.type === "video"
+        ? (String(component.props.borderStyle ?? "solid") as CSSProperties["borderStyle"])
+        : undefined,
+    borderWidth:
+      component.type === "image" || component.type === "video"
+        ? 1
+        : undefined,
   };
   const textStyle = getTextStyle(component);
 
@@ -1181,7 +1222,10 @@ function CanvasComponent({
           />
         </div>
       ) : component.type === "divider" ? (
-        <div className="mt-4 border-t border-zinc-300" />
+        <div
+          className="mt-4 border-t"
+          style={{ borderColor: String(component.props.borderColor ?? "#d4d4d8") }}
+        />
       ) : component.type === "image" && component.content ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -1248,6 +1292,8 @@ function CanvasComponent({
           className="flex h-full w-full flex-col overflow-hidden rounded-md border border-zinc-200 bg-white text-left shadow-sm"
           style={{
             backgroundColor: String(component.props.backgroundColor ?? "#ffffff"),
+            borderColor: String(component.props.borderColor ?? "#e4e4e7"),
+            borderStyle: String(component.props.borderStyle ?? "solid") as CSSProperties["borderStyle"],
           }}
         >
           {component.props.thumbnailUrl ? (
@@ -1294,21 +1340,6 @@ function CanvasComponent({
           {component.type}
         </div>
       )}
-      {!preview ? (
-        component.type === "text" ? (
-          <div
-            {...listeners}
-            {...attributes}
-            className="absolute left-1/2 top-1 z-20 h-5 w-20 -translate-x-1/2 cursor-move rounded-full bg-white/90 text-center text-[10px] font-medium leading-5 text-zinc-500 shadow-sm ring-1 ring-zinc-200"
-            onPointerDown={(event) => {
-              event.stopPropagation();
-              listeners?.onPointerDown?.(event);
-            }}
-          >
-            이동
-          </div>
-        ) : null
-      ) : null}
       {!preview ? (
         <button
           type="button"
@@ -1452,8 +1483,8 @@ function PropertyPanel({
       <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
         Properties
       </h2>
-      <div className="mt-4 grid gap-4 text-sm">
-        <label className="grid gap-1">
+      <div className="mt-4 grid min-w-0 gap-4 text-sm">
+        <label className="grid min-w-0 gap-1">
           <span className="text-zinc-500">Navigation Mode</span>
           <select
             value={project.navigationMode}
@@ -1462,21 +1493,21 @@ function PropertyPanel({
                 event.target.value as ResumeProject["navigationMode"],
               )
             }
-            className="h-9 rounded-md border border-zinc-200 px-2"
+            className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
           >
             <option value="scroll">Scroll</option>
             <option value="router">Router</option>
           </select>
         </label>
-        <label className="grid gap-1">
+        <label className="grid min-w-0 gap-1">
           <span className="text-zinc-500">Canvas Components</span>
           <input
             readOnly
             value={`${components.length} items`}
-            className="h-9 rounded-md border border-zinc-200 px-2"
+            className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
           />
         </label>
-        <label className="grid gap-1">
+        <label className="grid min-w-0 gap-1">
           <span className="text-zinc-500">Canvas Background</span>
           <input
             type="color"
@@ -1486,7 +1517,7 @@ function PropertyPanel({
           />
         </label>
         {selectedComponent ? (
-          <div className="grid gap-4 border-t border-zinc-100 pt-4">
+          <div className="grid min-w-0 gap-4 border-t border-zinc-100 pt-4">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="font-medium text-zinc-950">
@@ -1514,7 +1545,7 @@ function PropertyPanel({
             {selectedComponent.type === "section" ||
             selectedComponent.type === "container" ||
             selectedComponent.type === "popup" ? (
-              <label className="grid gap-1">
+              <label className="grid min-w-0 gap-1">
                 <span className="text-zinc-500">
                   {selectedComponent.type === "popup" ? "Title" : "Label"}
                 </span>
@@ -1525,14 +1556,14 @@ function PropertyPanel({
                       content: event.target.value,
                     })
                   }
-                  className="h-9 rounded-md border border-zinc-200 px-2"
+                  className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
                 />
               </label>
             ) : null}
 
             {selectedComponent.type === "popup" ? (
               <div className="grid gap-3">
-                <label className="grid gap-1">
+                <label className="grid min-w-0 gap-1">
                   <span className="text-zinc-500">Description</span>
                   <textarea
                     value={String(selectedComponent.props.description ?? "")}
@@ -1547,7 +1578,7 @@ function PropertyPanel({
                     className="min-h-20 rounded-md border border-zinc-200 p-2"
                   />
                 </label>
-                <label className="grid gap-1">
+                <label className="grid min-w-0 gap-1">
                   <span className="text-zinc-500">Thumbnail Image</span>
                   <input
                     type="file"
@@ -1559,7 +1590,7 @@ function PropertyPanel({
                         void handleUpload(file, "image");
                       }
                     }}
-                    className="rounded-md border border-zinc-200 px-2 py-2 text-xs"
+                    className="w-full min-w-0 rounded-md border border-zinc-200 px-2 py-2 text-xs"
                   />
                   <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
                     <Upload className="size-3.5" />
@@ -1573,7 +1604,7 @@ function PropertyPanel({
                     <span className="text-xs text-red-600">{uploadError}</span>
                   ) : null}
                 </label>
-                <label className="grid gap-1">
+                <label className="grid min-w-0 gap-1">
                   <span className="text-zinc-500">Popup Window Background</span>
                   <input
                     type="color"
@@ -1594,8 +1625,8 @@ function PropertyPanel({
 
             {selectedComponent.type === "image" ||
             selectedComponent.type === "video" ? (
-              <div className="grid gap-3">
-                <label className="grid gap-1">
+              <div className="grid min-w-0 gap-3">
+                <label className="grid min-w-0 gap-1">
                   <span className="text-zinc-500">
                     {selectedComponent.type === "image"
                       ? "Image File"
@@ -1615,7 +1646,7 @@ function PropertyPanel({
                         void handleUpload(file, mediaType);
                       }
                     }}
-                    className="rounded-md border border-zinc-200 px-2 py-2 text-xs"
+                    className="w-full min-w-0 rounded-md border border-zinc-200 px-2 py-2 text-xs"
                   />
                   <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
                     <Upload className="size-3.5" />
@@ -1629,7 +1660,7 @@ function PropertyPanel({
                     <span className="text-xs text-red-600">{uploadError}</span>
                   ) : null}
                 </label>
-                <label className="grid gap-1">
+                <label className="grid min-w-0 gap-1">
                   <span className="text-zinc-500">Fit</span>
                   <select
                     value={String(selectedComponent.props.objectFit ?? "cover")}
@@ -1641,7 +1672,7 @@ function PropertyPanel({
                         },
                       })
                     }
-                    className="h-9 rounded-md border border-zinc-200 px-2"
+                    className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
                   >
                     <option value="cover">Crop</option>
                     <option value="contain">Fit</option>
@@ -1677,7 +1708,7 @@ function PropertyPanel({
 
             {selectedComponent.type === "button" ||
             selectedComponent.type === "link" ? (
-              <label className="grid gap-1">
+              <label className="grid min-w-0 gap-1">
                 <span className="text-zinc-500">
                   {selectedComponent.type === "button"
                     ? "Button Label"
@@ -1690,13 +1721,13 @@ function PropertyPanel({
                       content: event.target.value,
                     })
                   }
-                  className="h-9 rounded-md border border-zinc-200 px-2"
+                  className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
                 />
               </label>
             ) : null}
 
             {selectedComponent.type === "link" ? (
-              <label className="grid gap-1">
+              <label className="grid min-w-0 gap-1">
                 <span className="text-zinc-500">Href</span>
                 <input
                   value={String(selectedComponent.props.href ?? "")}
@@ -1709,7 +1740,7 @@ function PropertyPanel({
                     })
                   }
                   placeholder="https://example.com"
-                  className="h-9 rounded-md border border-zinc-200 px-2"
+                  className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
                 />
               </label>
             ) : null}
@@ -1817,16 +1848,22 @@ function PropertyPanel({
                 </div>
               </details>
             ) : null}
-            <label className="grid gap-1">
-              <span className="text-zinc-500">Background Color</span>
+            <label className="grid min-w-0 gap-1">
+              <span className="text-zinc-500">
+                {selectedComponent.type === "divider" ? "Border Color" : "Background Color"}
+              </span>
               <input
                 type="color"
-                value={String(selectedComponent.props.backgroundColor ?? "#ffffff")}
+                value={String(
+                  selectedComponent.type === "divider"
+                    ? selectedComponent.props.borderColor ?? "#d4d4d8"
+                    : selectedComponent.props.backgroundColor ?? "#ffffff",
+                )}
                 onChange={(event) =>
                   onUpdate(selectedComponent.id, {
                     props: {
                       ...selectedComponent.props,
-                      backgroundColor: event.target.value,
+                      [selectedComponent.type === "divider" ? "borderColor" : "backgroundColor"]: event.target.value,
                     },
                   })
                 }
@@ -1834,25 +1871,31 @@ function PropertyPanel({
               />
             </label>
             {selectedComponent.type === "section" ||
-            selectedComponent.type === "container" ? (
+            selectedComponent.type === "container" ||
+            selectedComponent.type === "image" ||
+            selectedComponent.type === "video" ||
+            selectedComponent.type === "popup" ? (
               <details className="rounded-md border border-zinc-200 p-3" open>
                 <summary className="cursor-pointer text-sm font-medium text-zinc-700">
                   Box Style
                 </summary>
                 <div className="mt-3 grid gap-3">
-                  <NumberField
-                    label="Background Opacity (%)"
-                    value={Number(selectedComponent.props.backgroundOpacity ?? 100)}
-                    onChange={(value) =>
-                      onUpdate(selectedComponent.id, {
-                        props: {
-                          ...selectedComponent.props,
-                          backgroundOpacity: clamp(value, 0, 100),
-                        },
-                      })
-                    }
-                  />
-                  <label className="grid gap-1">
+                  {selectedComponent.type === "section" ||
+                  selectedComponent.type === "container" ? (
+                    <NumberField
+                      label="Background Opacity (%)"
+                      value={Number(selectedComponent.props.backgroundOpacity ?? 100)}
+                      onChange={(value) =>
+                        onUpdate(selectedComponent.id, {
+                          props: {
+                            ...selectedComponent.props,
+                            backgroundOpacity: clamp(value, 0, 100),
+                          },
+                        })
+                      }
+                    />
+                  ) : null}
+                  <label className="grid min-w-0 gap-1">
                     <span className="text-zinc-500">Border Color</span>
                     <input
                       type="color"
@@ -1868,7 +1911,7 @@ function PropertyPanel({
                       className="h-9 w-full rounded-md border border-zinc-200"
                     />
                   </label>
-                  <label className="grid gap-1">
+                  <label className="grid min-w-0 gap-1">
                     <span className="text-zinc-500">Border Style</span>
                     <select
                       value={String(selectedComponent.props.borderStyle ?? "dashed")}
@@ -1880,7 +1923,7 @@ function PropertyPanel({
                           },
                         })
                       }
-                      className="h-9 rounded-md border border-zinc-200 px-2"
+                      className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
                     >
                       <option value="dashed">Dashed</option>
                       <option value="solid">Solid</option>
