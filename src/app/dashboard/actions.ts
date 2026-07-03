@@ -4,40 +4,44 @@ import { redirect } from "next/navigation";
 import { getSubscriptionTier, projectLimits } from "@/config/plans";
 import { appendSlugSuffix, createSlugCandidate } from "@/lib/utils/slug";
 import { createClient } from "@/lib/supabase/server";
-import type { ProjectMode, ResumePage } from "@/types/project";
+import type { NavigationItem, ProjectMode, ResumePage } from "@/types/project";
 
-function buildInitialPages(mode: ProjectMode): ResumePage[] {
-  const sectionId = crypto.randomUUID();
-
-  if (mode === "free") {
-    return [
+function buildEmptyPage(label: string, slug: string, order: number): ResumePage {
+  return {
+    id: crypto.randomUUID(),
+    slug,
+    title: label,
+    order,
+    sections: [
       {
         id: crypto.randomUUID(),
-        slug: "home",
-        title: "Home",
+        title: label,
         order: 0,
-        sections: [
-          {
-            id: sectionId,
-            title: "Home",
-            order: 0,
-            components: [],
-          },
-        ],
+        components: [],
       },
-    ];
+    ],
+  };
+}
+
+function buildInitialPages(mode: ProjectMode, navigation: NavigationItem[]): ResumePage[] {
+  if (mode === "free") {
+    return navigation.map((item) => buildEmptyPage(item.label, item.target, item.order));
   }
 
-  return [
-    {
+  return navigation.map((item) => {
+    if (item.target !== "resume") {
+      return buildEmptyPage(item.label, item.target, item.order);
+    }
+
+    return {
       id: crypto.randomUUID(),
-      slug: "home",
-      title: "Home",
-      order: 0,
+      slug: item.target,
+      title: item.label,
+      order: item.order,
       sections: [
         {
-          id: sectionId,
-          title: "Resume",
+          id: crypto.randomUUID(),
+          title: item.label,
           order: 0,
           components: [
             {
@@ -63,8 +67,8 @@ function buildInitialPages(mode: ProjectMode): ResumePage[] {
           ],
         },
       ],
-    },
-  ];
+    };
+  });
 }
 
 async function resolveAvailableSlug(baseSlug: string) {
@@ -144,9 +148,9 @@ export async function createProjectAction(formData: FormData) {
       title,
       slug,
       mode,
-      navigation_mode: "scroll",
+      navigation_mode: "router",
       navigation,
-      pages: buildInitialPages(mode),
+      pages: buildInitialPages(mode, navigation),
     })
     .select("id")
     .single();
@@ -157,4 +161,3 @@ export async function createProjectAction(formData: FormData) {
 
   redirect(`/editor/${data.id}`);
 }
-

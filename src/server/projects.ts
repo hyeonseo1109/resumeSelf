@@ -1,6 +1,90 @@
 import { starterResumeProject } from "@/config/templates";
 import { createClient } from "@/lib/supabase/server";
-import type { ResumeProject } from "@/types/project";
+import type { NavigationItem, ProjectMode, ResumePage, ResumeProject } from "@/types/project";
+
+function buildEmptyPage(label: string, slug: string, order: number): ResumePage {
+  return {
+    id: `page-${slug}`,
+    slug,
+    title: label,
+    order,
+    sections: [
+      {
+        id: `section-${slug}`,
+        title: label,
+        order: 0,
+        components: [],
+      },
+    ],
+  };
+}
+
+function normalizeProject(project: ResumeProject): ResumeProject {
+  const navigation = project.navigation
+    .map((item, order) => ({ ...item, order }))
+    .filter((item) => item.target);
+  const pages = [...project.pages].sort((a, b) => a.order - b.order);
+  const homeOnlyPage = pages.length === 1 && pages[0]?.slug === "home" ? pages[0] : null;
+  const normalizedPages: ResumePage[] = [];
+
+  navigation.forEach((item, order) => {
+    const existingPage =
+      pages.find((page) => page.slug === item.target) ??
+      (order === 0 && homeOnlyPage ? homeOnlyPage : undefined);
+
+    if (existingPage) {
+      normalizedPages.push({
+        ...existingPage,
+        slug: item.target,
+        title: item.label,
+        order,
+        sections:
+          existingPage.sections.length > 0
+            ? existingPage.sections.map((section, sectionIndex) =>
+                sectionIndex === 0 ? { ...section, title: item.label, order: 0 } : section,
+              )
+            : buildEmptyPage(item.label, item.target, order).sections,
+      });
+      return;
+    }
+
+    normalizedPages.push(buildEmptyPage(item.label, item.target, order));
+  });
+
+  const orphanPages = pages.filter((page) => !normalizedPages.some((normalizedPage) => normalizedPage.id === page.id));
+
+  return {
+    ...project,
+    navigation,
+    pages: [...normalizedPages, ...orphanPages.map((page, index) => ({ ...page, order: normalizedPages.length + index }))],
+  };
+}
+
+function mapProject(data: {
+  id: string;
+  owner_id: string;
+  title: string;
+  slug: string;
+  mode: ProjectMode;
+  navigation_mode: ResumeProject["navigationMode"];
+  navigation: NavigationItem[] | null;
+  pages: ResumePage[] | null;
+  updated_at: string;
+  published_at: string | null;
+}): ResumeProject {
+  return normalizeProject({
+    id: data.id,
+    ownerId: data.owner_id,
+    title: data.title,
+    slug: data.slug,
+    mode: data.mode,
+    navigationMode: data.navigation_mode,
+    navigation: data.navigation ?? [],
+    pages: data.pages ?? [],
+    updatedAt: data.updated_at,
+    publishedAt: data.published_at,
+  });
+}
 
 export async function getCurrentUser() {
   const supabase = await createClient();
@@ -30,18 +114,7 @@ export async function listProjects(ownerId?: string): Promise<ResumeProject[]> {
     return [];
   }
 
-  return data.map((project) => ({
-    id: project.id,
-    ownerId: project.owner_id,
-    title: project.title,
-    slug: project.slug,
-    mode: project.mode,
-    navigationMode: project.navigation_mode,
-    navigation: project.navigation ?? [],
-    pages: project.pages ?? [],
-    updatedAt: project.updated_at,
-    publishedAt: project.published_at,
-  }));
+  return data.map(mapProject);
 }
 
 export async function getProjectBySlug(slug: string): Promise<ResumeProject | null> {
@@ -61,18 +134,7 @@ export async function getProjectBySlug(slug: string): Promise<ResumeProject | nu
     return null;
   }
 
-  return {
-    id: data.id,
-    ownerId: data.owner_id,
-    title: data.title,
-    slug: data.slug,
-    mode: data.mode,
-    navigationMode: data.navigation_mode,
-    navigation: data.navigation ?? [],
-    pages: data.pages ?? [],
-    updatedAt: data.updated_at,
-    publishedAt: data.published_at,
-  };
+  return mapProject(data);
 }
 
 export async function getProjectById(projectId: string, ownerId: string): Promise<ResumeProject | null> {

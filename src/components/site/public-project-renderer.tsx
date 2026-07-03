@@ -63,7 +63,7 @@ export function PublicProjectRenderer({
           <PublicComponent key={component.id} component={component} displayTop={displayTop} />
         ))}
       </section>
-      {isScrollMode ? <PublicToc navigation={project.navigation} /> : null}
+      {isScrollMode && project.navigation.length > 0 ? <PublicToc navigation={project.navigation} /> : null}
     </main>
   );
 }
@@ -139,14 +139,14 @@ function PublicComponent({ component, displayTop }: { component: ResumeComponent
 
 function PublicToc({ navigation }: { navigation: ResumeProject["navigation"] }) {
   return (
-    <aside className="fixed left-[calc(50%+450px)] top-1/2 z-40 hidden w-44 -translate-y-1/2 rounded-lg border border-zinc-200 bg-white/95 p-2 shadow-sm lg:block">
-      <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">Contents</p>
+    <aside className="fixed right-2 top-1/2 z-40 w-28 -translate-y-1/2 p-2 text-right sm:right-4 sm:w-36 lg:left-[calc(50%+450px)] lg:right-auto lg:w-44">
+      <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-300">Contents</p>
       <div className="grid gap-1">
         {navigation.map((item) => (
           <a
             key={item.id}
             href={`#${item.target}`}
-            className="rounded-md px-2 py-1.5 text-left text-xs font-medium text-zinc-400 transition hover:bg-zinc-100 hover:text-base hover:font-semibold hover:text-zinc-950"
+            className="rounded-md px-2 py-1.5 text-right text-xs font-medium text-zinc-400 transition hover:text-base hover:font-semibold hover:text-zinc-950"
           >
             {item.label}
           </a>

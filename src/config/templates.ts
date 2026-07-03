@@ -6,7 +6,7 @@ export const starterResumeProject: ResumeProject = {
   title: "Eunseo Resume",
   slug: "eunseo",
   mode: "template",
-  navigationMode: "scroll",
+  navigationMode: "router",
   updatedAt: "2026-01-01T00:00:00.000Z",
   publishedAt: null,
   navigation: [
@@ -16,9 +16,9 @@ export const starterResumeProject: ResumeProject = {
   ],
   pages: [
     {
-      id: "page-home",
-      slug: "home",
-      title: "Home",
+      id: "page-resume",
+      slug: "resume",
+      title: "Resume",
       order: 0,
       sections: [
         {
@@ -47,6 +47,34 @@ export const starterResumeProject: ResumeProject = {
               props: { fontSize: 17, color: "#4b5563" },
             },
           ],
+        },
+      ],
+    },
+    {
+      id: "page-portfolio",
+      slug: "portfolio",
+      title: "Portfolio",
+      order: 1,
+      sections: [
+        {
+          id: "portfolio",
+          title: "Portfolio",
+          order: 0,
+          components: [],
+        },
+      ],
+    },
+    {
+      id: "page-about",
+      slug: "about",
+      title: "About",
+      order: 2,
+      sections: [
+        {
+          id: "about",
+          title: "About",
+          order: 0,
+          components: [],
         },
       ],
     },

@@ -3,6 +3,40 @@
 import { create } from "zustand";
 import type { ComponentType, ResumeComponent, ResumeProject, SaveStatus } from "@/types/project";
 
+function normalizeSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function createUniqueTarget(base: string, existingTargets: string[]) {
+  const normalizedBase = normalizeSlug(base) || "page";
+  let candidate = normalizedBase;
+  let index = 2;
+
+  while (existingTargets.includes(candidate)) {
+    candidate = `${normalizedBase}-${index}`;
+    index += 1;
+  }
+
+  return candidate;
+}
+
+function getNextPageLabel(existingLabels: string[]) {
+  let index = existingLabels.length + 1;
+  let label = `Page ${index}`;
+
+  while (existingLabels.includes(label)) {
+    index += 1;
+    label = `Page ${index}`;
+  }
+
+  return label;
+}
+
 interface EditorState {
   project: ResumeProject;
   activePageId: string;
@@ -40,6 +74,41 @@ export function createEditorStore(initialProject: ResumeProject) {
     markSaveError: () => set({ saveStatus: "error" }),
     addComponent: (type) =>
       set((state) => {
+        if (state.project.navigationMode === "scroll" && type === "section") {
+          const label = getNextPageLabel(state.project.navigation.map((item) => item.label));
+          const target = createUniqueTarget(label, state.project.navigation.map((item) => item.target));
+          const pageId = crypto.randomUUID();
+          const navId = crypto.randomUUID();
+          const order = state.project.navigation.length;
+
+          return {
+            saveStatus: "dirty",
+            activePageId: pageId,
+            selectedComponentId: null,
+            project: {
+              ...state.project,
+              navigation: [...state.project.navigation, { id: navId, label, target, order }],
+              pages: [
+                ...state.project.pages,
+                {
+                  id: pageId,
+                  slug: target,
+                  title: label,
+                  order,
+                  sections: [
+                    {
+                      id: crypto.randomUUID(),
+                      title: label,
+                      order: 0,
+                      components: [],
+                    },
+                  ],
+                },
+              ],
+            },
+          };
+        }
+
         const component: ResumeComponent = {
           id: crypto.randomUUID(),
           type,
@@ -148,8 +217,8 @@ export function createEditorStore(initialProject: ResumeProject) {
     addNavigationPage: () =>
       set((state) => {
         const order = state.project.navigation.length;
-        const label = `Page ${order + 1}`;
-        const target = `page-${order + 1}`;
+        const label = getNextPageLabel(state.project.navigation.map((item) => item.label));
+        const target = createUniqueTarget(label, state.project.navigation.map((item) => item.target));
         const pageId = crypto.randomUUID();
         const navId = crypto.randomUUID();
 
@@ -183,7 +252,10 @@ export function createEditorStore(initialProject: ResumeProject) {
     updateNavigationItem: (id, patch) =>
       set((state) => {
         const currentItem = state.project.navigation.find((item) => item.id === id);
-        const nextTarget = patch.target ?? currentItem?.target;
+        const requestedTarget = patch.target ?? currentItem?.target ?? "";
+        const nextTarget = patch.target
+          ? createUniqueTarget(requestedTarget, state.project.navigation.filter((item) => item.id !== id).map((item) => item.target))
+          : requestedTarget;
         const nextLabel = patch.label ?? currentItem?.label;
 
         return {

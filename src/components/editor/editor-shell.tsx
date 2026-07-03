@@ -292,12 +292,13 @@ export function EditorShell({ project }: EditorShellProps) {
   }
 
   async function exportPdf() {
-    const element = document.querySelector("#resume-canvas");
-    if (!element) {
-      return;
-    }
-
-    const pdfTarget = createPdfSafeClone(element as HTMLElement);
+    const pdfTarget = createPdfExportNode({
+      project: editorProject,
+      activePage,
+      isScrollMode,
+      pageLayouts,
+      canvasHeight,
+    });
     const html2pdf = (await import("html2pdf.js")).default;
 
     try {
@@ -305,7 +306,7 @@ export function EditorShell({ project }: EditorShellProps) {
         .set({
           filename: `${editorProject.slug}.pdf`,
           margin: 8,
-          html2canvas: { scale: 2, backgroundColor: "#ffffff" },
+          html2canvas: { scale: 2, backgroundColor: "#ffffff", useCORS: true },
           jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
         })
         .from(pdfTarget)
@@ -567,7 +568,7 @@ export function EditorShell({ project }: EditorShellProps) {
           />
         ) : null}
       </div>
-      {editorProject.navigationMode === "scroll" ? (
+      {editorProject.navigationMode === "scroll" && editorProject.navigation.length > 0 ? (
         <ScrollToc
           navigation={editorProject.navigation}
           activeTarget={
@@ -1278,7 +1279,7 @@ function ScrollToc({
   onSelect: (target: string) => void;
 }) {
   return (
-    <aside className="fixed left-[calc(50%+300px)] top-1/2 z-40 hidden w-44 -translate-y-1/2 p-2 lg:block text-right">
+    <aside className="fixed right-2 top-1/2 z-40 w-28 -translate-y-1/2 p-2 text-right sm:right-4 sm:w-36 lg:left-[calc(50%+300px)] lg:right-auto lg:w-44">
       {/* <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 ">
         Contents
       </p> */}
@@ -1320,81 +1321,174 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function createPdfSafeClone(source: HTMLElement) {
+function createPdfExportNode({
+  project,
+  activePage,
+  isScrollMode,
+  pageLayouts,
+  canvasHeight,
+}: {
+  project: ResumeProject;
+  activePage?: ResumeProject["pages"][number];
+  isScrollMode: boolean;
+  pageLayouts: Array<{
+    page: ResumeProject["pages"][number];
+    components: ResumeComponent[];
+    offset: number;
+    height: number;
+  }>;
+  canvasHeight: number;
+}) {
   const wrapper = document.createElement("div");
   wrapper.style.position = "absolute";
   wrapper.style.left = "0";
   wrapper.style.top = "0";
   wrapper.style.background = "#ffffff";
   wrapper.style.color = "#111827";
-  wrapper.style.width = `${source.offsetWidth}px`;
-  wrapper.style.minHeight = `${source.scrollHeight}px`;
+  wrapper.style.width = "840px";
+  wrapper.style.minHeight = `${canvasHeight}px`;
   wrapper.style.zIndex = "2147483647";
   wrapper.style.pointerEvents = "none";
+  wrapper.style.fontFamily = "Arial, Helvetica, sans-serif";
 
-  const clone = source.cloneNode(true) as HTMLElement;
-  clone.removeAttribute("id");
-  clone.style.width = `${source.offsetWidth}px`;
-  clone.style.minHeight = `${source.scrollHeight}px`;
-  sanitizePdfColors(clone);
-  wrapper.appendChild(clone);
+  const canvas = document.createElement("div");
+  canvas.style.position = "relative";
+  canvas.style.width = "840px";
+  canvas.style.minHeight = `${canvasHeight}px`;
+  canvas.style.background = "#ffffff";
+  canvas.style.color = "#111827";
+
+  const header = document.createElement("div");
+  header.style.display = "flex";
+  header.style.alignItems = "center";
+  header.style.height = "64px";
+  header.style.padding = "0 32px";
+  header.style.borderBottom = "1px solid #f4f4f5";
+  header.style.boxSizing = "border-box";
+  header.style.fontSize = "14px";
+  header.style.fontWeight = "700";
+  header.textContent = project.title;
+  canvas.appendChild(header);
+
+  const layouts = isScrollMode
+    ? pageLayouts
+    : [
+        {
+          page: activePage ?? project.pages[0],
+          components: activePage?.sections[0]?.components ?? [],
+          offset: 0,
+          height: canvasHeight,
+        },
+      ];
+
+  layouts.forEach((layout) => {
+    if (!layout.page) {
+      return;
+    }
+
+    if (isScrollMode) {
+      const label =
+        project.navigation.find((item) => item.target === layout.page.slug)
+          ?.label ?? layout.page.title;
+      const title = document.createElement("div");
+      title.style.position = "absolute";
+      title.style.left = "48px";
+      title.style.top = `${layout.offset + 76}px`;
+      title.style.fontSize = "11px";
+      title.style.fontWeight = "700";
+      title.style.letterSpacing = "1.4px";
+      title.style.color = "#a1a1aa";
+      title.textContent = label.toUpperCase();
+      canvas.appendChild(title);
+    }
+
+    layout.components.forEach((component) => {
+      canvas.appendChild(
+        createPdfComponent(
+          component,
+          component.y + layout.offset + (isScrollMode ? 44 : 0),
+        ),
+      );
+    });
+  });
+
+  wrapper.appendChild(canvas);
   document.body.appendChild(wrapper);
 
   return wrapper;
 }
 
-function sanitizePdfColors(root: HTMLElement) {
-  root
-    .querySelectorAll("[data-editor-control='true']")
-    .forEach((node) => node.remove());
-  const nodes = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
+function createPdfComponent(component: ResumeComponent, top: number) {
+  const frame = document.createElement("div");
+  frame.style.position = "absolute";
+  frame.style.left = `${component.x}px`;
+  frame.style.top = `${top}px`;
+  frame.style.width = `${component.width}px`;
+  frame.style.height = `${component.height}px`;
+  frame.style.boxSizing = "border-box";
+  frame.style.overflow = "hidden";
+  frame.style.borderRadius = "6px";
+  frame.style.color = String(component.props.color ?? "#111827");
+  frame.style.fontSize = `${Number(component.props.fontSize ?? 16)}px`;
+  frame.style.fontWeight = String(component.props.fontWeight ?? 400);
 
-  nodes.forEach((node) => {
-    const computed = window.getComputedStyle(node);
-    const inline = node.style;
+  if (component.type === "text") {
+    frame.style.padding = "8px";
+    frame.style.whiteSpace = "pre-wrap";
+    frame.textContent = component.content ?? "";
+    return frame;
+  }
 
-    node.removeAttribute("class");
-    inline.display = computed.display;
-    inline.position = computed.position;
-    inline.boxSizing = "border-box";
-    inline.width = computed.width;
-    inline.height = computed.height;
-    inline.minHeight = computed.minHeight;
-    inline.left = computed.left;
-    inline.top = computed.top;
-    inline.right = computed.right;
-    inline.bottom = computed.bottom;
-    inline.margin = computed.margin;
-    inline.padding = computed.padding;
-    inline.fontFamily = computed.fontFamily;
-    inline.fontSize = computed.fontSize;
-    inline.fontWeight = computed.fontWeight;
-    inline.lineHeight = computed.lineHeight;
-    inline.textAlign = computed.textAlign;
-    inline.justifyContent = computed.justifyContent;
-    inline.alignItems = computed.alignItems;
-    inline.flexDirection = computed.flexDirection;
-    inline.gap = computed.gap;
-    inline.overflow = computed.overflow;
-    inline.objectFit = computed.objectFit;
-    inline.borderRadius = computed.borderRadius;
-    inline.borderWidth = computed.borderWidth;
-    inline.borderStyle =
-      computed.borderStyle === "none" ? "solid" : computed.borderStyle;
-    node.style.color = safeColor(computed.color, "#111827");
-    node.style.backgroundColor = safeColor(
-      computed.backgroundColor,
-      "transparent",
-    );
-    node.style.borderColor = safeColor(computed.borderColor, "#e5e7eb");
-    node.style.outlineColor = "transparent";
-    node.style.boxShadow = "none";
-    node.style.textDecorationColor = safeColor(computed.color, "#111827");
-  });
-}
+  if (component.type === "image" && component.content) {
+    const image = document.createElement("img");
+    image.src = component.content;
+    image.crossOrigin = "anonymous";
+    image.style.width = "100%";
+    image.style.height = "100%";
+    image.style.objectFit = String(component.props.objectFit ?? "cover");
+    image.style.objectPosition = `${Number(component.props.objectPositionX ?? 50)}% ${Number(component.props.objectPositionY ?? 50)}%`;
+    frame.appendChild(image);
+    return frame;
+  }
 
-function safeColor(value: string, fallback: string) {
-  return /(lab|lch|oklab|oklch|color-mix|var)\(/i.test(value)
-    ? fallback
-    : value;
+  if (component.type === "divider") {
+    frame.style.borderTop = "1px solid #d4d4d8";
+    return frame;
+  }
+
+  if (component.type === "button") {
+    frame.style.display = "flex";
+    frame.style.alignItems = "center";
+    frame.style.justifyContent = "center";
+    frame.style.background = "#09090b";
+    frame.style.color = "#ffffff";
+    frame.textContent = component.content ?? "버튼";
+    return frame;
+  }
+
+  if (component.type === "link") {
+    frame.style.display = "flex";
+    frame.style.alignItems = "center";
+    frame.style.justifyContent = "center";
+    frame.style.border = "1px solid #d4d4d8";
+    frame.style.textDecoration = "underline";
+    frame.textContent = component.content ?? "링크";
+    return frame;
+  }
+
+  if (component.type === "section" || component.type === "container") {
+    frame.style.border = "1px dashed #d4d4d8";
+    frame.style.background = String(component.props.backgroundColor ?? "#f8fafc");
+    frame.style.padding = "12px";
+    frame.textContent = component.content ?? component.type;
+    return frame;
+  }
+
+  frame.style.display = "flex";
+  frame.style.alignItems = "center";
+  frame.style.justifyContent = "center";
+  frame.style.background = "#f4f4f5";
+  frame.style.color = "#71717a";
+  frame.textContent = component.type;
+  return frame;
 }
