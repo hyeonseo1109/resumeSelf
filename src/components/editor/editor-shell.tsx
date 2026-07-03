@@ -666,7 +666,7 @@ export function EditorShell({ project }: EditorShellProps) {
       <div
         className={cn(
           "grid flex-1",
-          mode === "edit" ? "grid-cols-[240px_1fr_280px]" : "grid-cols-1",
+          mode === "edit" ? "grid-cols-[240px_minmax(0,1fr)_360px]" : "grid-cols-1",
         )}
       >
         {mode === "edit" ? (
@@ -694,7 +694,7 @@ export function EditorShell({ project }: EditorShellProps) {
           </aside>
         ) : null}
 
-        <main ref={scrollAreaRef} className="overflow-auto p-6">
+        <main ref={scrollAreaRef} className="min-w-0 overflow-auto p-6">
           <DndContext
             sensors={sensors}
             onDragMove={handleDragMove}
@@ -1155,27 +1155,31 @@ function CanvasComponent({
         </button>
       ) : null}
       {component.type === "text" ? (
-        <textarea
-          readOnly={preview}
-          value={textDraft}
-          onPointerDown={(event) => {
-            if (!preview) {
-              event.stopPropagation();
-              onSelect();
-            }
-          }}
-          onChange={(event) => setTextDraft(event.target.value)}
-          onBlur={() => {
-            if (textDraft !== (component.content ?? "")) {
-              onInlineTextChange(textDraft);
-            }
-          }}
-          className="absolute inset-3 resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-0 text-zinc-900 outline-none"
+        <div
+          className="h-full w-full rounded-md p-3"
           style={{
-            ...textStyle,
             backgroundColor: String(component.props.backgroundColor ?? "transparent"),
           }}
-        />
+        >
+          <textarea
+            readOnly={preview}
+            value={textDraft}
+            onPointerDown={(event) => {
+              if (!preview) {
+                event.stopPropagation();
+                onSelect();
+              }
+            }}
+            onChange={(event) => setTextDraft(event.target.value)}
+            onBlur={() => {
+              if (textDraft !== (component.content ?? "")) {
+                onInlineTextChange(textDraft);
+              }
+            }}
+            className="h-full w-full resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-0 text-zinc-900 outline-none"
+            style={textStyle}
+          />
+        </div>
       ) : component.type === "divider" ? (
         <div className="mt-4 border-t border-zinc-300" />
       ) : component.type === "image" && component.content ? (
@@ -1343,10 +1347,17 @@ function PopupOverlay({
     560,
     ...childrenComponents.map((component) => component.y + component.height + 120),
   );
+  const popupWindowBackground = String(popup.props.popupBackgroundColor ?? "#ffffff");
 
   return (
-    <div className="fixed inset-x-4 top-20 z-[70] mx-auto max-h-[78vh] max-w-[840px] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-2xl">
-      <div className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-zinc-100 bg-white px-5">
+    <div
+      className="fixed inset-x-4 top-20 z-[70] mx-auto max-h-[78vh] max-w-[840px] overflow-hidden rounded-lg border border-zinc-200 shadow-2xl"
+      style={{ backgroundColor: popupWindowBackground }}
+    >
+      <div
+        className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-zinc-100 px-5"
+        style={{ backgroundColor: popupWindowBackground }}
+      >
         <div>
           <p className="text-sm font-semibold text-zinc-950">{popup.content ?? "Popup title"}</p>
           <p className="text-xs text-zinc-500">{String(popup.props.description ?? "")}</p>
@@ -1437,7 +1448,7 @@ function PropertyPanel({
   }
 
   return (
-    <aside className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto border-l border-zinc-200 bg-white p-4">
+    <aside className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto overflow-x-hidden border-l border-zinc-200 bg-white p-4">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
         Properties
       </h2>
@@ -1561,6 +1572,22 @@ function PropertyPanel({
                   {uploadError ? (
                     <span className="text-xs text-red-600">{uploadError}</span>
                   ) : null}
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-zinc-500">Popup Window Background</span>
+                  <input
+                    type="color"
+                    value={String(selectedComponent.props.popupBackgroundColor ?? "#ffffff")}
+                    onChange={(event) =>
+                      onUpdate(selectedComponent.id, {
+                        props: {
+                          ...selectedComponent.props,
+                          popupBackgroundColor: event.target.value,
+                        },
+                      })
+                    }
+                    className="h-9 w-full rounded-md border border-zinc-200"
+                  />
                 </label>
               </div>
             ) : null}
@@ -1890,7 +1917,7 @@ function NumberField({
         type="number"
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="h-9 rounded-md border border-zinc-200 px-2"
+        className="h-9 w-24 max-w-full rounded-md border border-zinc-200 px-2"
       />
     </label>
   );
