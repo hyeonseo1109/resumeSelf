@@ -1,6 +1,14 @@
 "use client";
 
-import { DndContext, type DragEndEvent, type DragMoveEvent, useDraggable } from "@dnd-kit/core";
+import {
+  DndContext,
+  PointerSensor,
+  type DragEndEvent,
+  type DragMoveEvent,
+  useDraggable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import {
   ChevronDown,
@@ -9,7 +17,6 @@ import {
   LayoutDashboard,
   Link2,
   Magnet,
-  Move,
   Pencil,
   Plus,
   Save,
@@ -33,6 +40,37 @@ interface EditorShellProps {
 interface GuideLine {
   axis: "x" | "y";
   position: number;
+}
+
+const FONT_OPTIONS = [
+  { label: "System", value: "Arial, Helvetica, sans-serif" },
+  { label: "Serif", value: "Georgia, 'Times New Roman', serif" },
+  { label: "Mono", value: "'SFMono-Regular', Consolas, monospace" },
+  { label: "Pretendard", value: "Pretendard, Arial, sans-serif" },
+  { label: "Noto Sans KR", value: "'Noto Sans KR', Arial, sans-serif" },
+];
+const PDF_PAGE_WIDTH = 840;
+const PDF_PAGE_HEIGHT = 1188;
+
+function withAlpha(hex: string, opacity: number) {
+  const normalized = hex.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return hex;
+  }
+
+  const r = Number.parseInt(normalized.slice(0, 2), 16);
+  const g = Number.parseInt(normalized.slice(2, 4), 16);
+  const b = Number.parseInt(normalized.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${clamp(opacity, 0, 100) / 100})`;
+}
+
+function getTextStyle(component: ResumeComponent): CSSProperties {
+  return {
+    color: String(component.props.color ?? "#111827"),
+    fontSize: Number(component.props.fontSize ?? 16),
+    fontWeight: Number(component.props.fontWeight ?? 400),
+    fontFamily: String(component.props.fontFamily ?? FONT_OPTIONS[0].value),
+  };
 }
 
 export function EditorShell({ project }: EditorShellProps) {
@@ -79,6 +117,9 @@ export function EditorShell({ project }: EditorShellProps) {
   );
   const [smartGuidesEnabled, setSmartGuidesEnabled] = useState(true);
   const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
   const scrollAreaRef = useRef<HTMLElement | null>(null);
   const projectRef = useRef(editorProject);
   const saveStatusRef = useRef(saveStatus);
@@ -102,6 +143,7 @@ export function EditorShell({ project }: EditorShellProps) {
     >((layouts, page) => {
       const pageComponents = (page.sections[0]?.components ?? []).filter(
         (component) =>
+          !component.props.popupId &&
           !(
             component.type === "section" &&
             component.props.sectionFrame === true
@@ -152,7 +194,9 @@ export function EditorShell({ project }: EditorShellProps) {
       )
     : Math.max(
         1120,
-        ...activePageComponents.map(
+        ...activePageComponents
+          .filter((component) => !component.props.popupId)
+          .map(
           (component) => component.y + component.height + 160,
         ),
       );
@@ -386,11 +430,11 @@ export function EditorShell({ project }: EditorShellProps) {
               : type === "text"
                 ? { width: 360, height: 96 }
                 : { width: 360, height: 140 };
-    const scrollRoot = scrollAreaRef.current;
-    const visibleTop = scrollRoot?.scrollTop ?? 0;
-    const visibleHeight = scrollRoot?.clientHeight ?? 720;
+    const canvas = document.getElementById("resume-canvas");
+    const canvasTop = canvas?.getBoundingClientRect().top ?? 0;
+    const visibleCenter = window.innerHeight / 2 - canvasTop;
     const x = Math.max(24, Math.round(420 - size.width / 2));
-    const y = Math.max(88, Math.round(visibleTop + visibleHeight / 2 - size.height / 2));
+    const y = Math.max(88, Math.round(visibleCenter - size.height / 2));
 
     addComponentAt(type, { x, y });
   }
@@ -430,9 +474,21 @@ export function EditorShell({ project }: EditorShellProps) {
       await html2pdf()
         .set({
           filename: `${editorProject.slug}.pdf`,
-          margin: 8,
-          html2canvas: { scale: 2, backgroundColor: "#ffffff", useCORS: true },
-          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          margin: 0,
+          html2canvas: {
+            scale: 2,
+            backgroundColor: "#ffffff",
+            useCORS: true,
+            width: PDF_PAGE_WIDTH,
+            windowWidth: PDF_PAGE_WIDTH,
+            scrollX: 0,
+            scrollY: 0,
+          },
+          jsPDF: {
+            unit: "px",
+            format: [PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT],
+            orientation: "portrait",
+          },
         })
         .from(pdfTarget.firstElementChild ?? pdfTarget)
         .save();
@@ -640,6 +696,7 @@ export function EditorShell({ project }: EditorShellProps) {
 
         <main ref={scrollAreaRef} className="overflow-auto p-6">
           <DndContext
+            sensors={sensors}
             onDragMove={handleDragMove}
             onDragEnd={handleDragEnd}
             onDragCancel={() => setGuideLines([])}
@@ -691,6 +748,9 @@ export function EditorShell({ project }: EditorShellProps) {
                     );
                   })
                 : null}
+              {mode === "edit" && canvasHeight > PDF_PAGE_HEIGHT ? (
+                <PageBreakGuides canvasHeight={canvasHeight} />
+              ) : null}
               {renderItems.map(({ component, displayTop }) => (
                 <CanvasComponent
                   key={component.id}
@@ -789,11 +849,30 @@ function RouteSwitcher({
   onSetHomePage: (id: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const switcherRef = useRef<HTMLDivElement | null>(null);
   const activePage =
     project.pages.find((page) => page.id === activePageId) ?? project.pages[0];
 
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    function handleOutsideClick(event: MouseEvent) {
+      if (
+        switcherRef.current &&
+        !switcherRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [isOpen]);
+
   return (
-    <div className="relative">
+    <div ref={switcherRef} className="relative">
       <button
         type="button"
         onClick={() => setIsOpen((value) => !value)}
@@ -956,6 +1035,35 @@ function getComponentLayer(component: ResumeComponent) {
   return 5;
 }
 
+function hasTypography(component: ResumeComponent) {
+  return ["text", "button", "link", "section", "container", "popup"].includes(component.type);
+}
+
+function PageBreakGuides({ canvasHeight }: { canvasHeight: number }) {
+  const totalPages = Math.max(1, Math.ceil(canvasHeight / PDF_PAGE_HEIGHT));
+
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
+      {Array.from({ length: totalPages - 1 }, (_, index) => {
+        const pageNumber = index + 2;
+        const top = pageNumber - 1 === 0 ? 0 : (pageNumber - 1) * PDF_PAGE_HEIGHT;
+
+        return (
+          <div
+            key={pageNumber}
+            className="absolute left-0 right-0 border-t border-dashed border-rose-300"
+            style={{ top }}
+          >
+            <span className="absolute right-3 top-1 rounded bg-white/90 px-2 py-0.5 text-[11px] font-medium text-rose-500 shadow-sm ring-1 ring-rose-100">
+              PDF {pageNumber}/{totalPages}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CanvasComponent({
   component,
   displayTop,
@@ -983,10 +1091,6 @@ function CanvasComponent({
   });
   const [textDraft, setTextDraft] = useState(component.content ?? "");
 
-  useEffect(() => {
-    setTextDraft(component.content ?? "");
-  }, [component.content, component.id]);
-
   const style = {
     width: component.width,
     height: component.height,
@@ -994,9 +1098,8 @@ function CanvasComponent({
     top: displayTop,
     transform: CSS.Translate.toString(transform),
     zIndex: getComponentLayer(component),
-    pointerEvents: component.type === "section" && !isSelected ? "none" : "auto",
   };
-  const wrapperDragProps = component.type === "text" ? {} : { ...listeners, ...attributes };
+  const textStyle = getTextStyle(component);
 
   function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -1022,7 +1125,8 @@ function CanvasComponent({
     <div
       ref={setNodeRef}
       style={style}
-      {...wrapperDragProps}
+      {...listeners}
+      {...attributes}
       onMouseDown={(event) => {
         if (!preview) {
           event.stopPropagation();
@@ -1066,9 +1170,9 @@ function CanvasComponent({
               onInlineTextChange(textDraft);
             }
           }}
-          className="h-full w-full resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-2 text-zinc-900 outline-none"
+          className="absolute inset-3 resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-0 text-zinc-900 outline-none"
           style={{
-            ...(component.props as CSSProperties),
+            ...textStyle,
             backgroundColor: String(component.props.backgroundColor ?? "transparent"),
           }}
         />
@@ -1104,6 +1208,7 @@ function CanvasComponent({
           type="button"
           className="h-full w-full rounded-md bg-zinc-950 px-4 text-sm font-medium text-white"
           style={{
+            ...textStyle,
             backgroundColor: String(component.props.backgroundColor ?? "#09090b"),
             color: String(component.props.color ?? "#ffffff"),
           }}
@@ -1122,6 +1227,7 @@ function CanvasComponent({
           }}
           className="flex h-full w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
           style={{
+            ...textStyle,
             backgroundColor: String(component.props.backgroundColor ?? "#ffffff"),
             color: String(component.props.color ?? "#18181b"),
           }}
@@ -1161,17 +1267,20 @@ function CanvasComponent({
         </button>
       ) : component.type === "section" || component.type === "container" ? (
         <div
-          className="flex h-full w-full items-start rounded-md border border-dashed p-3 text-sm font-medium text-zinc-600"
+          className="flex h-full w-full items-start rounded-md border p-3 text-sm font-medium text-zinc-600"
           id={
             component.type === "section"
               ? normalizeAnchor(component.content ?? component.id)
               : undefined
           }
           style={{
-            backgroundColor: String(
-              component.props.backgroundColor ?? "#f8fafc",
+            ...textStyle,
+            backgroundColor: withAlpha(
+              String(component.props.backgroundColor ?? "#f8fafc"),
+              Number(component.props.backgroundOpacity ?? 100),
             ),
             borderColor: String(component.props.borderColor ?? "#d4d4d8"),
+            borderStyle: String(component.props.borderStyle ?? "dashed") as CSSProperties["borderStyle"],
           }}
         >
           {component.content}
@@ -1181,6 +1290,21 @@ function CanvasComponent({
           {component.type}
         </div>
       )}
+      {!preview ? (
+        component.type === "text" ? (
+          <div
+            {...listeners}
+            {...attributes}
+            className="absolute left-1/2 top-1 z-20 h-5 w-20 -translate-x-1/2 cursor-move rounded-full bg-white/90 text-center text-[10px] font-medium leading-5 text-zinc-500 shadow-sm ring-1 ring-zinc-200"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              listeners?.onPointerDown?.(event);
+            }}
+          >
+            이동
+          </div>
+        ) : null
+      ) : null}
       {!preview ? (
         <button
           type="button"
@@ -1221,7 +1345,7 @@ function PopupOverlay({
   );
 
   return (
-    <div className="absolute inset-x-10 top-24 z-40 max-h-[720px] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-2xl">
+    <div className="fixed inset-x-4 top-20 z-[70] mx-auto max-h-[78vh] max-w-[840px] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-2xl">
       <div className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-zinc-100 bg-white px-5">
         <div>
           <p className="text-sm font-semibold text-zinc-950">{popup.content ?? "Popup title"}</p>
@@ -1238,7 +1362,7 @@ function PopupOverlay({
           <X className="size-4" />
         </button>
       </div>
-      <div className="relative overflow-y-auto" style={{ height: 640 }}>
+      <div className="relative overflow-y-auto" style={{ height: "calc(78vh - 56px)" }}>
         <div className="relative" style={{ minHeight: overlayHeight }}>
           {childrenComponents.length === 0 ? (
             <div className="absolute left-10 top-10 rounded-md border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-400">
@@ -1273,6 +1397,8 @@ function PropertyPanel({
   onUpload,
   project,
   onSetNavigationMode,
+  canvasBackground,
+  onUpdateCanvasBackground,
 }: {
   components: ResumeComponent[];
   selectedComponent: ResumeComponent | null;
@@ -1285,6 +1411,8 @@ function PropertyPanel({
   ) => Promise<void>;
   project: ResumeProject;
   onSetNavigationMode: (mode: ResumeProject["navigationMode"]) => void;
+  canvasBackground: string;
+  onUpdateCanvasBackground: (color: string) => void;
 }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -1335,6 +1463,15 @@ function PropertyPanel({
             readOnly
             value={`${components.length} items`}
             className="h-9 rounded-md border border-zinc-200 px-2"
+          />
+        </label>
+        <label className="grid gap-1">
+          <span className="text-zinc-500">Canvas Background</span>
+          <input
+            type="color"
+            value={canvasBackground}
+            onChange={(event) => onUpdateCanvasBackground(event.target.value)}
+            className="h-9 w-full rounded-md border border-zinc-200"
           />
         </label>
         {selectedComponent ? (
@@ -1581,33 +1718,78 @@ function PropertyPanel({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <label className="grid gap-1">
-                <span className="text-zinc-500">Text Color</span>
-                <input
-                  type="color"
-                  value={String(selectedComponent.props.color ?? "#111827")}
-                  onChange={(event) =>
-                    onUpdate(selectedComponent.id, {
-                      props: {
-                        ...selectedComponent.props,
-                        color: event.target.value,
-                      },
-                    })
-                  }
-                  className="h-9 w-full rounded-md border border-zinc-200"
-                />
-              </label>
-              <NumberField
-                label="Font Size"
-                value={Number(selectedComponent.props.fontSize ?? 16)}
-                onChange={(value) =>
-                  onUpdate(selectedComponent.id, {
-                    props: { ...selectedComponent.props, fontSize: value },
-                  })
-                }
-              />
-            </div>
+            {hasTypography(selectedComponent) ? (
+              <details className="rounded-md border border-zinc-200 p-3" open>
+                <summary className="cursor-pointer text-sm font-medium text-zinc-700">
+                  Typography
+                </summary>
+                <div className="mt-3 grid gap-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="grid gap-1">
+                      <span className="text-zinc-500">Text Color</span>
+                      <input
+                        type="color"
+                        value={String(selectedComponent.props.color ?? "#111827")}
+                        onChange={(event) =>
+                          onUpdate(selectedComponent.id, {
+                            props: {
+                              ...selectedComponent.props,
+                              color: event.target.value,
+                            },
+                          })
+                        }
+                        className="h-9 w-full rounded-md border border-zinc-200"
+                      />
+                    </label>
+                    <NumberField
+                      label="Font Size"
+                      value={Number(selectedComponent.props.fontSize ?? 16)}
+                      onChange={(value) =>
+                        onUpdate(selectedComponent.id, {
+                          props: { ...selectedComponent.props, fontSize: value },
+                        })
+                      }
+                    />
+                  </div>
+                  <label className="grid gap-1">
+                    <span className="text-zinc-500">Font Family</span>
+                    <select
+                      value={String(selectedComponent.props.fontFamily ?? FONT_OPTIONS[0].value)}
+                      onChange={(event) =>
+                        onUpdate(selectedComponent.id, {
+                          props: {
+                            ...selectedComponent.props,
+                            fontFamily: event.target.value,
+                          },
+                        })
+                      }
+                      className="h-9 rounded-md border border-zinc-200 px-2"
+                    >
+                      {FONT_OPTIONS.map((font) => (
+                        <option key={font.value} value={font.value}>
+                          {font.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 rounded-md bg-zinc-50 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={Number(selectedComponent.props.fontWeight ?? 400) >= 700}
+                      onChange={(event) =>
+                        onUpdate(selectedComponent.id, {
+                          props: {
+                            ...selectedComponent.props,
+                            fontWeight: event.target.checked ? 700 : 400,
+                          },
+                        })
+                      }
+                    />
+                    <span className="text-sm font-medium text-zinc-700">Bold</span>
+                  </label>
+                </div>
+              </details>
+            ) : null}
             <label className="grid gap-1">
               <span className="text-zinc-500">Background Color</span>
               <input
@@ -1624,6 +1806,62 @@ function PropertyPanel({
                 className="h-9 w-full rounded-md border border-zinc-200"
               />
             </label>
+            {selectedComponent.type === "section" ||
+            selectedComponent.type === "container" ? (
+              <details className="rounded-md border border-zinc-200 p-3" open>
+                <summary className="cursor-pointer text-sm font-medium text-zinc-700">
+                  Box Style
+                </summary>
+                <div className="mt-3 grid gap-3">
+                  <NumberField
+                    label="Background Opacity (%)"
+                    value={Number(selectedComponent.props.backgroundOpacity ?? 100)}
+                    onChange={(value) =>
+                      onUpdate(selectedComponent.id, {
+                        props: {
+                          ...selectedComponent.props,
+                          backgroundOpacity: clamp(value, 0, 100),
+                        },
+                      })
+                    }
+                  />
+                  <label className="grid gap-1">
+                    <span className="text-zinc-500">Border Color</span>
+                    <input
+                      type="color"
+                      value={String(selectedComponent.props.borderColor ?? "#d4d4d8")}
+                      onChange={(event) =>
+                        onUpdate(selectedComponent.id, {
+                          props: {
+                            ...selectedComponent.props,
+                            borderColor: event.target.value,
+                          },
+                        })
+                      }
+                      className="h-9 w-full rounded-md border border-zinc-200"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-zinc-500">Border Style</span>
+                    <select
+                      value={String(selectedComponent.props.borderStyle ?? "dashed")}
+                      onChange={(event) =>
+                        onUpdate(selectedComponent.id, {
+                          props: {
+                            ...selectedComponent.props,
+                            borderStyle: event.target.value,
+                          },
+                        })
+                      }
+                      className="h-9 rounded-md border border-zinc-200 px-2"
+                    >
+                      <option value="dashed">Dashed</option>
+                      <option value="solid">Solid</option>
+                    </select>
+                  </label>
+                </div>
+              </details>
+            ) : null}
           </div>
         ) : (
           <div className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
@@ -1734,7 +1972,7 @@ function createPdfExportNode({
   wrapper.style.top = "0";
   wrapper.style.background = "#ffffff";
   wrapper.style.color = "#111827";
-  wrapper.style.width = "840px";
+  wrapper.style.width = `${PDF_PAGE_WIDTH}px`;
   wrapper.style.height = `${canvasHeight}px`;
   wrapper.style.minHeight = `${canvasHeight}px`;
   wrapper.style.zIndex = "2147483647";
@@ -1743,7 +1981,7 @@ function createPdfExportNode({
 
   const canvas = document.createElement("div");
   canvas.style.position = "relative";
-  canvas.style.width = "840px";
+  canvas.style.width = `${PDF_PAGE_WIDTH}px`;
   canvas.style.height = `${canvasHeight}px`;
   canvas.style.minHeight = `${canvasHeight}px`;
   canvas.style.background = "#ffffff";
@@ -1766,7 +2004,9 @@ function createPdfExportNode({
     : [
         {
           page: activePage ?? project.pages[0],
-          components: activePage?.sections[0]?.components ?? [],
+          components: (activePage?.sections[0]?.components ?? []).filter(
+            (component) => !component.props.popupId,
+          ),
           offset: 0,
           height: canvasHeight,
         },
@@ -1793,7 +2033,10 @@ function createPdfExportNode({
       canvas.appendChild(title);
     }
 
-    layout.components.forEach((component) => {
+    layout.components
+      .filter((component) => !component.props.popupId)
+      .sort((a, b) => getComponentLayer(a) - getComponentLayer(b))
+      .forEach((component) => {
       canvas.appendChild(
         createPdfComponent(
           component,
@@ -1843,6 +2086,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   frame.style.color = String(component.props.color ?? "#111827");
   frame.style.fontSize = `${Number(component.props.fontSize ?? 16)}px`;
   frame.style.fontWeight = String(component.props.fontWeight ?? 400);
+  frame.style.fontFamily = String(component.props.fontFamily ?? FONT_OPTIONS[0].value);
 
   if (component.type === "text") {
     frame.style.padding = "8px";
@@ -1878,6 +2122,38 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     return frame;
   }
 
+  if (component.type === "popup") {
+    frame.style.border = "1px solid #e4e4e7";
+    frame.style.background = String(component.props.backgroundColor ?? "#ffffff");
+
+    const thumbnailUrl = String(component.props.thumbnailUrl ?? "");
+    if (thumbnailUrl) {
+      const image = document.createElement("img");
+      image.src = thumbnailUrl;
+      image.crossOrigin = "anonymous";
+      image.style.width = "100%";
+      image.style.height = "60%";
+      image.style.objectFit = "cover";
+      frame.appendChild(image);
+    }
+
+    const title = document.createElement("div");
+    title.style.padding = "12px 12px 4px";
+    title.style.fontSize = `${Number(component.props.fontSize ?? 15)}px`;
+    title.style.fontWeight = String(component.props.fontWeight ?? 700);
+    title.textContent = component.content ?? "Popup title";
+    frame.appendChild(title);
+
+    const description = document.createElement("div");
+    description.style.padding = "0 12px 12px";
+    description.style.fontSize = "12px";
+    description.style.lineHeight = "1.5";
+    description.style.color = "#71717a";
+    description.textContent = String(component.props.description ?? "");
+    frame.appendChild(description);
+    return frame;
+  }
+
   if (component.type === "link") {
     frame.style.display = "flex";
     frame.style.alignItems = "center";
@@ -1889,8 +2165,11 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   }
 
   if (component.type === "section" || component.type === "container") {
-    frame.style.border = "1px dashed #d4d4d8";
-    frame.style.background = String(component.props.backgroundColor ?? "#f8fafc");
+    frame.style.border = `1px ${String(component.props.borderStyle ?? "dashed")} ${String(component.props.borderColor ?? "#d4d4d8")}`;
+    frame.style.background = withAlpha(
+      String(component.props.backgroundColor ?? "#f8fafc"),
+      Number(component.props.backgroundOpacity ?? 100),
+    );
     frame.style.padding = "12px";
     frame.textContent = component.content ?? component.type;
     return frame;
