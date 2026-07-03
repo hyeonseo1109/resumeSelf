@@ -13,17 +13,23 @@ export async function TopNav() {
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-4 sm:px-6">
-        <Link href="/" className="text-sm font-bold tracking-[0.18em] text-zinc-950">
+        <Link
+          href="/"
+          className="text-sm font-bold tracking-[0.18em] text-zinc-950"
+        >
           RESUMESELF
         </Link>
         <nav className="flex items-center gap-2">
-          <Link href="/dashboard" className="rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100">
+          {/* <Link
+            href="/dashboard"
+            className="rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+          >
             Dashboard
-          </Link>
+          </Link> */}
           <div className="hidden sm:block">
             {displayName ? (
-              <span className="inline-flex h-9 max-w-56 items-center truncate rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700">
-                {displayName}
+              <span className="inline-flex h-9 max-w-56 items-center truncate rounded-md px-3 text-xs font-medium text-zinc-700">
+                {displayName}님, 안녕하세요!
               </span>
             ) : (
               <OAuthButtons className="[&_button]:h-9 [&_button]:px-3 [&_button]:text-xs [&_p]:hidden" />

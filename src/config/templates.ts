@@ -3,8 +3,8 @@ import type { ResumeProject } from "@/types/project";
 export const starterResumeProject: ResumeProject = {
   id: "starter",
   ownerId: "system",
-  title: "Eunseo Resume",
-  slug: "eunseo",
+  title: "Hendo Resume",
+  slug: "Hendo",
   mode: "template",
   navigationMode: "router",
   updatedAt: "2026-01-01T00:00:00.000Z",
@@ -33,7 +33,8 @@ export const starterResumeProject: ResumeProject = {
               y: 72,
               width: 640,
               height: 120,
-              content: "안녕하세요. 문제를 구조화하고 제품으로 풀어내는 Product Designer Eunseo입니다.",
+              content:
+                "안녕하세요. 문제를 구조화하고 제품으로 풀어내는 Product Designer Hendo입니다.",
               props: { fontSize: 34, color: "#111827", fontWeight: 700 },
             },
             {
@@ -43,7 +44,8 @@ export const starterResumeProject: ResumeProject = {
               y: 214,
               width: 520,
               height: 92,
-              content: "Framer처럼 빠르게 배치하고 Notion처럼 쉽게 작성하는 웹 이력서 템플릿입니다.",
+              content:
+                "Framer처럼 빠르게 배치하고 Notion처럼 쉽게 작성하는 웹 이력서 템플릿입니다.",
               props: { fontSize: 17, color: "#4b5563" },
             },
           ],

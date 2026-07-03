@@ -3,16 +3,21 @@
 import {
   DndContext,
   PointerSensor,
+  closestCenter,
   type DragEndEvent,
   type DragMoveEvent,
   useDraggable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
   ChevronDown,
-  ChevronUp,
   Download,
   Eye,
   LayoutDashboard,
@@ -26,7 +31,7 @@ import {
   X,
 } from "lucide-react";
 import NextLink from "next/link";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { insertableComponents } from "@/config/editor";
@@ -95,7 +100,7 @@ export function EditorShell({ project }: EditorShellProps) {
     store,
     (state) => state.removeNavigationPage,
   );
-  const moveNavigationPage = useStore(store, (state) => state.moveNavigationPage);
+  const reorderNavigationPage = useStore(store, (state) => state.reorderNavigationPage);
   const setHomePage = useStore(store, (state) => state.setHomePage);
   const setNavigationMode = useStore(store, (state) => state.setNavigationMode);
   const selectedComponentId = useStore(
@@ -579,7 +584,7 @@ export function EditorShell({ project }: EditorShellProps) {
               onAddNavigationPage={addNavigationPage}
               onUpdateNavigationItem={updateNavigationItem}
               onRemoveNavigationPage={removeNavigationPage}
-              onMoveNavigationPage={moveNavigationPage}
+              onReorderNavigationPage={reorderNavigationPage}
               onSetHomePage={setHomePage}
             />
           ) : null}
@@ -838,7 +843,7 @@ function RouteSwitcher({
   onAddNavigationPage,
   onUpdateNavigationItem,
   onRemoveNavigationPage,
-  onMoveNavigationPage,
+  onReorderNavigationPage,
   onSetHomePage,
 }: {
   project: ResumeProject;
@@ -850,11 +855,14 @@ function RouteSwitcher({
     patch: { label?: string; target?: string },
   ) => void;
   onRemoveNavigationPage: (id: string) => void;
-  onMoveNavigationPage: (id: string, direction: "up" | "down") => void;
+  onReorderNavigationPage: (activeId: string, overId: string) => void;
   onSetHomePage: (id: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const switcherRef = useRef<HTMLDivElement | null>(null);
+  const routeSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
   const activePage =
     project.pages.find((page) => page.id === activePageId) ?? project.pages[0];
 
@@ -888,41 +896,37 @@ function RouteSwitcher({
       </button>
       {isOpen ? (
         <div className="absolute right-0 top-11 z-50 w-80 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg">
-          <div className="grid gap-2">
-            {project.navigation.map((item, index) => {
+          <DndContext
+            sensors={routeSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => {
+              const activeId = String(event.active.id);
+              const overId = event.over?.id ? String(event.over.id) : "";
+              if (overId) {
+                onReorderNavigationPage(activeId, overId);
+              }
+            }}
+          >
+            <SortableContext
+              items={project.navigation.map((item) => item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="grid gap-2">
+                {project.navigation.map((item, index) => {
               const linkedPage = project.pages.find(
                 (page) => page.slug === item.target,
               );
               const isHome = index === 0;
 
               return (
-                <div
+                <SortableRouteItem
                   key={item.id}
-                  className="grid gap-2 rounded-md bg-zinc-50 p-2"
+                  itemId={item.id}
                 >
-                  <div className="flex items-center gap-1">
-                    <div className="grid gap-1">
-                      <button
-                        type="button"
-                        disabled={index === 0}
-                        onClick={() => onMoveNavigationPage(item.id, "up")}
-                        className="inline-flex size-5 items-center justify-center rounded border border-zinc-200 text-zinc-400 disabled:opacity-30"
-                        aria-label="Move route up"
-                      >
-                        <ChevronUp className="size-3" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={index === project.navigation.length - 1}
-                        onClick={() => onMoveNavigationPage(item.id, "down")}
-                        className="inline-flex size-5 items-center justify-center rounded border border-zinc-200 text-zinc-400 disabled:opacity-30"
-                        aria-label="Move route down"
-                      >
-                        <ChevronDown className="size-3" />
-                      </button>
-                    </div>
+                  <div className="flex min-w-0 items-center gap-1">
                     <input
                       value={item.label}
+                      onPointerDown={(event) => event.stopPropagation()}
                       onChange={(event) =>
                         onUpdateNavigationItem(item.id, {
                           label: event.target.value,
@@ -932,6 +936,7 @@ function RouteSwitcher({
                     />
                     <button
                       type="button"
+                      onPointerDown={(event) => event.stopPropagation()}
                       onClick={() => linkedPage && onSelectPage(linkedPage.id)}
                       className={cn(
                         "h-8 rounded border border-zinc-200 px-2 text-xs",
@@ -943,6 +948,7 @@ function RouteSwitcher({
                     </button>
                     <button
                       type="button"
+                      onPointerDown={(event) => event.stopPropagation()}
                       onClick={() => onRemoveNavigationPage(item.id)}
                       className="inline-flex size-8 items-center justify-center rounded border border-zinc-200 text-zinc-400 hover:text-red-600"
                     >
@@ -952,6 +958,7 @@ function RouteSwitcher({
                   <div className="flex items-center gap-1">
                     <input
                       value={item.target}
+                      onPointerDown={(event) => event.stopPropagation()}
                       onChange={(event) =>
                         onUpdateNavigationItem(item.id, {
                           target: normalizeAnchor(event.target.value),
@@ -961,6 +968,7 @@ function RouteSwitcher({
                     />
                     <button
                       type="button"
+                      onPointerDown={(event) => event.stopPropagation()}
                       onClick={() => onSetHomePage(item.id)}
                       className={cn(
                         "h-8 rounded border border-zinc-200 px-2 text-xs",
@@ -972,10 +980,12 @@ function RouteSwitcher({
                       {isHome ? "대표" : "대표 지정"}
                     </button>
                   </div>
-                </div>
+                </SortableRouteItem>
               );
             })}
-          </div>
+              </div>
+            </SortableContext>
+          </DndContext>
           <button
             type="button"
             onClick={onAddNavigationPage}
@@ -986,6 +996,36 @@ function RouteSwitcher({
           </button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function SortableRouteItem({
+  itemId,
+  children,
+}: {
+  itemId: string;
+  children: ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: itemId,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+      {...attributes}
+      {...listeners}
+      className={cn(
+        "grid cursor-grab gap-2 rounded-md bg-zinc-50 p-2 active:cursor-grabbing",
+        isDragging && "relative z-10 shadow-lg ring-1 ring-emerald-300",
+      )}
+    >
+      {children}
     </div>
   );
 }
@@ -1263,16 +1303,22 @@ function CanvasComponent({
         >
           {component.content ?? "버튼"}
         </button>
+      ) : component.type === "link" && !preview ? (
+        <div
+          className="flex h-full w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4"
+          style={{
+            ...textStyle,
+            backgroundColor: String(component.props.backgroundColor ?? "#ffffff"),
+            color: String(component.props.color ?? "#18181b"),
+          }}
+        >
+          {component.content ?? "링크"}
+        </div>
       ) : component.type === "link" ? (
         <a
           href={String(component.props.href ?? "#")}
           target="_blank"
           rel="noreferrer"
-          onClick={(event) => {
-            if (!preview) {
-              event.preventDefault();
-            }
-          }}
           className="flex h-full w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
           style={{
             ...textStyle,

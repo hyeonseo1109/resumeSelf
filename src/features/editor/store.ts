@@ -56,6 +56,7 @@ interface EditorState {
   updateNavigationItem: (id: string, patch: { label?: string; target?: string }) => void;
   removeNavigationPage: (id: string) => void;
   moveNavigationPage: (id: string, direction: "up" | "down") => void;
+  reorderNavigationPage: (activeId: string, overId: string) => void;
   setHomePage: (id: string) => void;
   setNavigationMode: (mode: ResumeProject["navigationMode"]) => void;
   setMode: (mode: "edit" | "preview") => void;
@@ -371,6 +372,45 @@ export function createEditorStore(initialProject: ResumeProject) {
         const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
 
         if (currentIndex < 0 || nextIndex < 0 || nextIndex >= state.project.navigation.length) {
+          return state;
+        }
+
+        const navigation = [...state.project.navigation];
+        const [item] = navigation.splice(currentIndex, 1);
+        navigation.splice(nextIndex, 0, item);
+        const orderedNavigation = navigation.map((nav, order) => ({ ...nav, order }));
+        const pageBySlug = new Map(state.project.pages.map((page) => [page.slug, page]));
+        const orderedPages = orderedNavigation
+          .map((nav, order) => {
+            const page = pageBySlug.get(nav.target);
+            return page ? { ...page, order } : null;
+          })
+          .filter((page): page is NonNullable<typeof page> => Boolean(page));
+        const remainingPages = state.project.pages.filter(
+          (page) => !orderedNavigation.some((nav) => nav.target === page.slug),
+        );
+
+        return {
+          saveStatus: "dirty",
+          project: {
+            ...state.project,
+            navigation: orderedNavigation,
+            pages: [
+              ...orderedPages,
+              ...remainingPages.map((page, index) => ({
+                ...page,
+                order: orderedPages.length + index,
+              })),
+            ],
+          },
+        };
+      }),
+    reorderNavigationPage: (activeId, overId) =>
+      set((state) => {
+        const currentIndex = state.project.navigation.findIndex((nav) => nav.id === activeId);
+        const nextIndex = state.project.navigation.findIndex((nav) => nav.id === overId);
+
+        if (currentIndex < 0 || nextIndex < 0 || currentIndex === nextIndex) {
           return state;
         }
 
