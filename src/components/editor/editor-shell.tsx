@@ -31,7 +31,11 @@ import {
   X,
 } from "lucide-react";
 import NextLink from "next/link";
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type {
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+  ReactNode,
+} from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { insertableComponents } from "@/config/editor";
@@ -108,7 +112,10 @@ export function EditorShell({ project }: EditorShellProps) {
     store,
     (state) => state.removeNavigationPage,
   );
-  const reorderNavigationPage = useStore(store, (state) => state.reorderNavigationPage);
+  const reorderNavigationPage = useStore(
+    store,
+    (state) => state.reorderNavigationPage,
+  );
   const setHomePage = useStore(store, (state) => state.setHomePage);
   const setNavigationMode = useStore(store, (state) => state.setNavigationMode);
   const selectedComponentId = useStore(
@@ -179,22 +186,28 @@ export function EditorShell({ project }: EditorShellProps) {
       return [...layouts, layout];
     }, []);
   }, [editorProject.pages]);
-  const renderItems = (isScrollMode
-    ? pageLayouts.flatMap((layout) =>
-        layout.components.map((component) => ({
+  const renderItems = (
+    isScrollMode
+      ? pageLayouts.flatMap((layout) =>
+          layout.components.map((component) => ({
+            component,
+            displayTop: component.y + layout.offset + 44,
+          })),
+        )
+      : activePageComponents.map((component) => ({
           component,
-          displayTop: component.y + layout.offset + 44,
-        })),
-      )
-    : activePageComponents.map((component) => ({
-        component,
-        displayTop: component.y,
-      })))
+          displayTop: component.y,
+        }))
+  )
     .filter(({ component }) => !component.props.popupId)
-    .sort((a, b) => getComponentLayer(a.component) - getComponentLayer(b.component));
+    .sort(
+      (a, b) => getComponentLayer(a.component) - getComponentLayer(b.component),
+    );
   const components = isScrollMode ? allComponents : activePageComponents;
   const popupComponent =
-    components.find((component) => component.id === openPopupId && component.type === "popup") ?? null;
+    components.find(
+      (component) => component.id === openPopupId && component.type === "popup",
+    ) ?? null;
   const popupChildren = openPopupId
     ? components.filter((component) => component.props.popupId === openPopupId)
     : [];
@@ -212,11 +225,12 @@ export function EditorShell({ project }: EditorShellProps) {
         1120,
         ...activePageComponents
           .filter((component) => !component.props.popupId)
-          .map(
-          (component) => component.y + component.height + 160,
-        ),
+          .map((component) => component.y + component.height + 160),
       );
-  const canvasBackground = activePage?.canvasBackground ?? editorProject.pages[0]?.canvasBackground ?? "#ffffff";
+  const canvasBackground =
+    activePage?.canvasBackground ??
+    editorProject.pages[0]?.canvasBackground ??
+    "#ffffff";
 
   useEffect(() => {
     projectRef.current = editorProject;
@@ -329,9 +343,21 @@ export function EditorShell({ project }: EditorShellProps) {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
-  function getSmartSnap(component: ResumeComponent, nextX: number, nextY: number, nextWidth = component.width, nextHeight = component.height) {
+  function getSmartSnap(
+    component: ResumeComponent,
+    nextX: number,
+    nextY: number,
+    nextWidth = component.width,
+    nextHeight = component.height,
+  ) {
     if (!smartGuidesEnabled) {
-      return { x: Math.round(nextX), y: Math.round(nextY), width: Math.round(nextWidth), height: Math.round(nextHeight), guides: [] as GuideLine[] };
+      return {
+        x: Math.round(nextX),
+        y: Math.round(nextY),
+        width: Math.round(nextWidth),
+        height: Math.round(nextHeight),
+        guides: [] as GuideLine[],
+      };
     }
 
     const tolerance = 7;
@@ -342,14 +368,24 @@ export function EditorShell({ project }: EditorShellProps) {
     let snappedHeight = nextHeight;
     const canvasTargetsX = [0, 420, 840];
     const canvasTargetsY = [64, canvasHeight / 2, canvasHeight];
-    const otherComponents = components.filter((item) => item.id !== component.id && !item.props.popupId);
+    const otherComponents = components.filter(
+      (item) => item.id !== component.id && !item.props.popupId,
+    );
     const xTargets = [
       ...canvasTargetsX,
-      ...otherComponents.flatMap((item) => [item.x, item.x + item.width / 2, item.x + item.width]),
+      ...otherComponents.flatMap((item) => [
+        item.x,
+        item.x + item.width / 2,
+        item.x + item.width,
+      ]),
     ];
     const yTargets = [
       ...canvasTargetsY,
-      ...otherComponents.flatMap((item) => [item.y, item.y + item.height / 2, item.y + item.height]),
+      ...otherComponents.flatMap((item) => [
+        item.y,
+        item.y + item.height / 2,
+        item.y + item.height,
+      ]),
     ];
     const xPoints = [
       { kind: "left", value: nextX },
@@ -363,7 +399,9 @@ export function EditorShell({ project }: EditorShellProps) {
     ];
 
     for (const target of xTargets) {
-      const match = xPoints.find((point) => Math.abs(point.value - target) <= tolerance);
+      const match = xPoints.find(
+        (point) => Math.abs(point.value - target) <= tolerance,
+      );
       if (!match) continue;
       guides.push({ axis: "x", position: target });
       if (match.kind === "left") snappedX = target;
@@ -373,7 +411,9 @@ export function EditorShell({ project }: EditorShellProps) {
     }
 
     for (const target of yTargets) {
-      const match = yPoints.find((point) => Math.abs(point.value - target) <= tolerance);
+      const match = yPoints.find(
+        (point) => Math.abs(point.value - target) <= tolerance,
+      );
       if (!match) continue;
       guides.push({ axis: "y", position: target });
       if (match.kind === "top") snappedY = target;
@@ -384,10 +424,20 @@ export function EditorShell({ project }: EditorShellProps) {
 
     const horizontalPeers = components
       .filter((item) => item.id !== component.id && !item.props.popupId)
-      .filter((item) => nextY + nextHeight > item.y && nextY < item.y + item.height)
+      .filter(
+        (item) => nextY + nextHeight > item.y && nextY < item.y + item.height,
+      )
       .sort((a, b) => a.x - b.x);
-    for (let leftIndex = 0; leftIndex < horizontalPeers.length; leftIndex += 1) {
-      for (let rightIndex = leftIndex + 1; rightIndex < horizontalPeers.length; rightIndex += 1) {
+    for (
+      let leftIndex = 0;
+      leftIndex < horizontalPeers.length;
+      leftIndex += 1
+    ) {
+      for (
+        let rightIndex = leftIndex + 1;
+        rightIndex < horizontalPeers.length;
+        rightIndex += 1
+      ) {
         const left = horizontalPeers[leftIndex];
         const right = horizontalPeers[rightIndex];
         const leftRight = left.x + left.width;
@@ -407,10 +457,16 @@ export function EditorShell({ project }: EditorShellProps) {
 
     const verticalPeers = components
       .filter((item) => item.id !== component.id && !item.props.popupId)
-      .filter((item) => nextX + nextWidth > item.x && nextX < item.x + item.width)
+      .filter(
+        (item) => nextX + nextWidth > item.x && nextX < item.x + item.width,
+      )
       .sort((a, b) => a.y - b.y);
     for (let topIndex = 0; topIndex < verticalPeers.length; topIndex += 1) {
-      for (let bottomIndex = topIndex + 1; bottomIndex < verticalPeers.length; bottomIndex += 1) {
+      for (
+        let bottomIndex = topIndex + 1;
+        bottomIndex < verticalPeers.length;
+        bottomIndex += 1
+      ) {
         const top = verticalPeers[topIndex];
         const bottom = verticalPeers[bottomIndex];
         const topBottom = top.y + top.height;
@@ -437,7 +493,13 @@ export function EditorShell({ project }: EditorShellProps) {
     };
   }
 
-  function getSpacingGuides(component: ResumeComponent, nextX: number, nextY: number, nextWidth = component.width, nextHeight = component.height) {
+  function getSpacingGuides(
+    component: ResumeComponent,
+    nextX: number,
+    nextY: number,
+    nextWidth = component.width,
+    nextHeight = component.height,
+  ) {
     if (!smartGuidesEnabled) {
       return [];
     }
@@ -450,7 +512,9 @@ export function EditorShell({ project }: EditorShellProps) {
       midX: nextX + nextWidth / 2,
       midY: nextY + nextHeight / 2,
     };
-    const otherComponents = components.filter((item) => item.id !== component.id && !item.props.popupId);
+    const otherComponents = components.filter(
+      (item) => item.id !== component.id && !item.props.popupId,
+    );
     const horizontalRaw: SpacingGuide[] = [];
 
     for (const item of otherComponents) {
@@ -460,7 +524,11 @@ export function EditorShell({ project }: EditorShellProps) {
 
       const itemRightToMovingLeft = moving.left - (item.x + item.width);
       const movingRightToItemLeft = item.x - moving.right;
-      const cross = Math.round((Math.max(moving.top, item.y) + Math.min(moving.bottom, item.y + item.height)) / 2);
+      const cross = Math.round(
+        (Math.max(moving.top, item.y) +
+          Math.min(moving.bottom, item.y + item.height)) /
+          2,
+      );
 
       if (itemRightToMovingLeft >= 0) {
         horizontalRaw.push({
@@ -483,7 +551,9 @@ export function EditorShell({ project }: EditorShellProps) {
       }
     }
 
-    const horizontal: SpacingGuide[] = [...horizontalRaw].sort((a, b) => a.distance - b.distance);
+    const horizontal: SpacingGuide[] = [...horizontalRaw].sort(
+      (a, b) => a.distance - b.distance,
+    );
     const verticalRaw: SpacingGuide[] = [];
 
     for (const item of otherComponents) {
@@ -493,7 +563,11 @@ export function EditorShell({ project }: EditorShellProps) {
 
       const itemBottomToMovingTop = moving.top - (item.y + item.height);
       const movingBottomToItemTop = item.y - moving.bottom;
-      const cross = Math.round((Math.max(moving.left, item.x) + Math.min(moving.right, item.x + item.width)) / 2);
+      const cross = Math.round(
+        (Math.max(moving.left, item.x) +
+          Math.min(moving.right, item.x + item.width)) /
+          2,
+      );
 
       if (itemBottomToMovingTop >= 0) {
         verticalRaw.push({
@@ -516,9 +590,13 @@ export function EditorShell({ project }: EditorShellProps) {
       }
     }
 
-    const vertical: SpacingGuide[] = [...verticalRaw].sort((a, b) => a.distance - b.distance);
+    const vertical: SpacingGuide[] = [...verticalRaw].sort(
+      (a, b) => a.distance - b.distance,
+    );
 
-    return [horizontal[0], vertical[0]].filter((guide): guide is SpacingGuide => Boolean(guide));
+    return [horizontal[0], vertical[0]].filter((guide): guide is SpacingGuide =>
+      Boolean(guide),
+    );
   }
 
   function handleDragMove(event: DragMoveEvent) {
@@ -527,7 +605,11 @@ export function EditorShell({ project }: EditorShellProps) {
       return;
     }
 
-    const snap = getSmartSnap(component, component.x + event.delta.x, component.y + event.delta.y);
+    const snap = getSmartSnap(
+      component,
+      component.x + event.delta.x,
+      component.y + event.delta.y,
+    );
     setGuideLines(snap.guides);
     setSpacingGuides(getSpacingGuides(component, snap.x, snap.y));
   }
@@ -540,7 +622,11 @@ export function EditorShell({ project }: EditorShellProps) {
       return;
     }
 
-    const snap = getSmartSnap(component, component.x + delta.x, component.y + delta.y);
+    const snap = getSmartSnap(
+      component,
+      component.x + delta.x,
+      component.y + delta.y,
+    );
     setGuideLines(snap.guides);
     setSpacingGuides(getSpacingGuides(component, snap.x, snap.y));
     window.setTimeout(() => {
@@ -560,16 +646,32 @@ export function EditorShell({ project }: EditorShellProps) {
   ) {
     const nextWidth = Math.max(48, component.width + deltaWidth);
     const nextHeight = Math.max(36, component.height + deltaHeight);
-    const snap = getSmartSnap(component, component.x, component.y, nextWidth, nextHeight);
+    const snap = getSmartSnap(
+      component,
+      component.x,
+      component.y,
+      nextWidth,
+      nextHeight,
+    );
     setGuideLines(snap.guides);
-    setSpacingGuides(getSpacingGuides(component, component.x, component.y, snap.width, snap.height));
+    setSpacingGuides(
+      getSpacingGuides(
+        component,
+        component.x,
+        component.y,
+        snap.width,
+        snap.height,
+      ),
+    );
     updateComponent(component.id, {
       width: snap.width,
       height: snap.height,
     });
   }
 
-  function addComponentToVisibleCenter(type: Parameters<typeof addComponentAt>[0]) {
+  function addComponentToVisibleCenter(
+    type: Parameters<typeof addComponentAt>[0],
+  ) {
     const size =
       type === "divider"
         ? { width: 520, height: 140 }
@@ -819,7 +921,9 @@ export function EditorShell({ project }: EditorShellProps) {
       <div
         className={cn(
           "grid flex-1",
-          mode === "edit" ? "grid-cols-[240px_minmax(0,1fr)_360px]" : "grid-cols-1",
+          mode === "edit"
+            ? "grid-cols-[240px_minmax(0,1fr)_360px]"
+            : "grid-cols-1",
         )}
       >
         {mode === "edit" ? (
@@ -860,7 +964,10 @@ export function EditorShell({ project }: EditorShellProps) {
             <div
               id="resume-canvas"
               className="relative mx-auto w-full max-w-[840px] bg-white shadow-sm ring-1 ring-zinc-200"
-              style={{ minHeight: canvasHeight, backgroundColor: canvasBackground }}
+              style={{
+                minHeight: canvasHeight,
+                backgroundColor: canvasBackground,
+              }}
             >
               <SiteHeader
                 project={editorProject}
@@ -931,8 +1038,20 @@ export function EditorShell({ project }: EditorShellProps) {
                   className="pointer-events-none absolute z-30 border-emerald-500"
                   style={
                     guide.axis === "x"
-                      ? { left: guide.position, top: 0, bottom: 0, borderLeftWidth: 1, borderStyle: "dashed" }
-                      : { top: guide.position, left: 0, right: 0, borderTopWidth: 1, borderStyle: "dashed" }
+                      ? {
+                          left: guide.position,
+                          top: 0,
+                          bottom: 0,
+                          borderLeftWidth: 1,
+                          borderStyle: "dashed",
+                        }
+                      : {
+                          top: guide.position,
+                          left: 0,
+                          right: 0,
+                          borderTopWidth: 1,
+                          borderStyle: "dashed",
+                        }
                   }
                 />
               ))}
@@ -988,7 +1107,9 @@ export function EditorShell({ project }: EditorShellProps) {
                   onSelect={selectComponent}
                   onDelete={removeComponent}
                   onResize={resizeComponent}
-                  onInlineTextChange={(id, content) => updateComponent(id, { content })}
+                  onInlineTextChange={(id, content) =>
+                    updateComponent(id, { content })
+                  }
                 />
               ) : null}
             </div>
@@ -1009,7 +1130,8 @@ export function EditorShell({ project }: EditorShellProps) {
           />
         ) : null}
       </div>
-      {editorProject.navigationMode === "scroll" && editorProject.navigation.length > 0 ? (
+      {editorProject.navigationMode === "scroll" &&
+      editorProject.navigation.length > 0 ? (
         <ScrollToc
           navigation={editorProject.navigation}
           activeTarget={
@@ -1103,76 +1225,75 @@ function RouteSwitcher({
             >
               <div className="grid gap-2">
                 {project.navigation.map((item, index) => {
-              const linkedPage = project.pages.find(
-                (page) => page.slug === item.target,
-              );
-              const isHome = index === 0;
+                  const linkedPage = project.pages.find(
+                    (page) => page.slug === item.target,
+                  );
+                  const isHome = index === 0;
 
-              return (
-                <SortableRouteItem
-                  key={item.id}
-                  itemId={item.id}
-                >
-                  <div className="flex min-w-0 items-center gap-1">
-                    <input
-                      value={item.label}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onChange={(event) =>
-                        onUpdateNavigationItem(item.id, {
-                          label: event.target.value,
-                        })
-                      }
-                      className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs"
-                    />
-                    <button
-                      type="button"
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={() => linkedPage && onSelectPage(linkedPage.id)}
-                      className={cn(
-                        "h-8 rounded border border-zinc-200 px-2 text-xs",
-                        linkedPage?.id === activePageId &&
-                          "bg-zinc-950 text-white",
-                      )}
-                    >
-                      편집
-                    </button>
-                    <button
-                      type="button"
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={() => onRemoveNavigationPage(item.id)}
-                      className="inline-flex size-8 items-center justify-center rounded border border-zinc-200 text-zinc-400 hover:text-red-600"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <input
-                      value={item.target}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onChange={(event) =>
-                        onUpdateNavigationItem(item.id, {
-                          target: normalizeAnchor(event.target.value),
-                        })
-                      }
-                      className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs text-zinc-500"
-                    />
-                    <button
-                      type="button"
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={() => onSetHomePage(item.id)}
-                      className={cn(
-                        "h-8 rounded border border-zinc-200 px-2 text-xs",
-                        isHome
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "text-zinc-500",
-                      )}
-                    >
-                      {isHome ? "대표" : "대표 지정"}
-                    </button>
-                  </div>
-                </SortableRouteItem>
-              );
-            })}
+                  return (
+                    <SortableRouteItem key={item.id} itemId={item.id}>
+                      <div className="flex min-w-0 items-center gap-1">
+                        <input
+                          value={item.label}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onChange={(event) =>
+                            onUpdateNavigationItem(item.id, {
+                              label: event.target.value,
+                            })
+                          }
+                          className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs"
+                        />
+                        <button
+                          type="button"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={() =>
+                            linkedPage && onSelectPage(linkedPage.id)
+                          }
+                          className={cn(
+                            "h-8 rounded border border-zinc-200 px-2 text-xs",
+                            linkedPage?.id === activePageId &&
+                              "bg-zinc-950 text-white",
+                          )}
+                        >
+                          편집
+                        </button>
+                        <button
+                          type="button"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={() => onRemoveNavigationPage(item.id)}
+                          className="inline-flex size-8 items-center justify-center rounded border border-zinc-200 text-zinc-400 hover:text-red-600"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <input
+                          value={item.target}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onChange={(event) =>
+                            onUpdateNavigationItem(item.id, {
+                              target: normalizeAnchor(event.target.value),
+                            })
+                          }
+                          className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs text-zinc-500"
+                        />
+                        <button
+                          type="button"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={() => onSetHomePage(item.id)}
+                          className={cn(
+                            "h-8 rounded border border-zinc-200 px-2 text-xs",
+                            isHome
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "text-zinc-500",
+                          )}
+                        >
+                          {isHome ? "대표" : "대표 지정"}
+                        </button>
+                      </div>
+                    </SortableRouteItem>
+                  );
+                })}
               </div>
             </SortableContext>
           </DndContext>
@@ -1197,7 +1318,14 @@ function SortableRouteItem({
   itemId: string;
   children: ReactNode;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: itemId,
   });
 
@@ -1238,7 +1366,7 @@ function SiteHeader({
       <button
         type="button"
         onClick={onTitleClick}
-        className="text-sm font-semibold text-zinc-950 hover:text-emerald-700"
+        className="text-lg font-semibold text-zinc-950 hover:text-emerald-700"
       >
         {project.title}
       </button>
@@ -1291,7 +1419,9 @@ function getComponentLayer(component: ResumeComponent) {
 }
 
 function hasTypography(component: ResumeComponent) {
-  return ["text", "button", "link", "section", "container", "popup"].includes(component.type);
+  return ["text", "button", "link", "section", "container", "popup"].includes(
+    component.type,
+  );
 }
 
 function PageBreakGuides({ canvasHeight }: { canvasHeight: number }) {
@@ -1301,7 +1431,8 @@ function PageBreakGuides({ canvasHeight }: { canvasHeight: number }) {
     <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
       {Array.from({ length: totalPages - 1 }, (_, index) => {
         const pageNumber = index + 2;
-        const top = pageNumber - 1 === 0 ? 0 : (pageNumber - 1) * PDF_PAGE_HEIGHT;
+        const top =
+          pageNumber - 1 === 0 ? 0 : (pageNumber - 1) * PDF_PAGE_HEIGHT;
 
         return (
           <div
@@ -1363,12 +1494,12 @@ function CanvasComponent({
         : undefined,
     borderStyle:
       component.type === "image" || component.type === "video"
-        ? (String(component.props.borderStyle ?? "solid") as CSSProperties["borderStyle"])
+        ? (String(
+            component.props.borderStyle ?? "solid",
+          ) as CSSProperties["borderStyle"])
         : undefined,
     borderWidth:
-      component.type === "image" || component.type === "video"
-        ? 1
-        : undefined,
+      component.type === "image" || component.type === "video" ? 1 : undefined,
   };
   const textStyle = getTextStyle(component);
 
@@ -1429,7 +1560,9 @@ function CanvasComponent({
         <div
           className="h-full w-full rounded-md p-3"
           style={{
-            backgroundColor: String(component.props.backgroundColor ?? "transparent"),
+            backgroundColor: String(
+              component.props.backgroundColor ?? "transparent",
+            ),
           }}
         >
           <textarea
@@ -1454,7 +1587,9 @@ function CanvasComponent({
       ) : component.type === "divider" ? (
         <div
           className="mt-4 border-t"
-          style={{ borderColor: String(component.props.borderColor ?? "#d4d4d8") }}
+          style={{
+            borderColor: String(component.props.borderColor ?? "#d4d4d8"),
+          }}
         />
       ) : component.type === "image" && component.content ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -1487,7 +1622,9 @@ function CanvasComponent({
           className="h-full w-full rounded-md bg-zinc-950 px-4 text-sm font-medium text-white"
           style={{
             ...textStyle,
-            backgroundColor: String(component.props.backgroundColor ?? "#09090b"),
+            backgroundColor: String(
+              component.props.backgroundColor ?? "#09090b",
+            ),
             color: String(component.props.color ?? "#ffffff"),
           }}
         >
@@ -1498,7 +1635,9 @@ function CanvasComponent({
           className="flex h-full w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4"
           style={{
             ...textStyle,
-            backgroundColor: String(component.props.backgroundColor ?? "#ffffff"),
+            backgroundColor: String(
+              component.props.backgroundColor ?? "#ffffff",
+            ),
             color: String(component.props.color ?? "#18181b"),
           }}
         >
@@ -1512,7 +1651,9 @@ function CanvasComponent({
           className="flex h-full w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
           style={{
             ...textStyle,
-            backgroundColor: String(component.props.backgroundColor ?? "#ffffff"),
+            backgroundColor: String(
+              component.props.backgroundColor ?? "#ffffff",
+            ),
             color: String(component.props.color ?? "#18181b"),
           }}
         >
@@ -1527,9 +1668,13 @@ function CanvasComponent({
           }}
           className="flex h-full w-full flex-col overflow-hidden rounded-md border border-zinc-200 bg-white text-left shadow-sm"
           style={{
-            backgroundColor: String(component.props.backgroundColor ?? "#ffffff"),
+            backgroundColor: String(
+              component.props.backgroundColor ?? "#ffffff",
+            ),
             borderColor: String(component.props.borderColor ?? "#e4e4e7"),
-            borderStyle: String(component.props.borderStyle ?? "solid") as CSSProperties["borderStyle"],
+            borderStyle: String(
+              component.props.borderStyle ?? "solid",
+            ) as CSSProperties["borderStyle"],
           }}
         >
           {component.props.thumbnailUrl ? (
@@ -1540,11 +1685,19 @@ function CanvasComponent({
               className="h-32 w-full object-cover"
             />
           ) : null}
-          <span className={cn("px-3 text-sm font-semibold text-zinc-950", component.props.thumbnailUrl ? "pt-3" : "pt-4")}>
+          <span
+            className={cn(
+              "px-3 text-sm font-semibold text-zinc-950",
+              component.props.thumbnailUrl ? "pt-3" : "pt-4",
+            )}
+          >
             {component.content ?? "Popup title"}
           </span>
           <span className="line-clamp-2 px-3 pb-3 pt-1 text-xs leading-5 text-zinc-500">
-            {String(component.props.description ?? "클릭하면 자세한 내용을 볼 수 있습니다.")}
+            {String(
+              component.props.description ??
+                "클릭하면 자세한 내용을 볼 수 있습니다.",
+            )}
           </span>
         </button>
       ) : component.type === "section" || component.type === "container" ? (
@@ -1562,7 +1715,9 @@ function CanvasComponent({
               Number(component.props.backgroundOpacity ?? 100),
             ),
             borderColor: String(component.props.borderColor ?? "#d4d4d8"),
-            borderStyle: String(component.props.borderStyle ?? "dashed") as CSSProperties["borderStyle"],
+            borderStyle: String(
+              component.props.borderStyle ?? "dashed",
+            ) as CSSProperties["borderStyle"],
           }}
         >
           {component.content}
@@ -1603,14 +1758,22 @@ function PopupOverlay({
   onClose: () => void;
   onSelect: (id: string | null) => void;
   onDelete: (id: string) => void;
-  onResize: (component: ResumeComponent, deltaWidth: number, deltaHeight: number) => void;
+  onResize: (
+    component: ResumeComponent,
+    deltaWidth: number,
+    deltaHeight: number,
+  ) => void;
   onInlineTextChange: (id: string, content: string) => void;
 }) {
   const overlayHeight = Math.max(
     560,
-    ...childrenComponents.map((component) => component.y + component.height + 120),
+    ...childrenComponents.map(
+      (component) => component.y + component.height + 120,
+    ),
   );
-  const popupWindowBackground = String(popup.props.popupBackgroundColor ?? "#ffffff");
+  const popupWindowBackground = String(
+    popup.props.popupBackgroundColor ?? "#ffffff",
+  );
 
   return (
     <div
@@ -1622,8 +1785,12 @@ function PopupOverlay({
         style={{ backgroundColor: popupWindowBackground }}
       >
         <div>
-          <p className="text-sm font-semibold text-zinc-950">{popup.content ?? "Popup title"}</p>
-          <p className="text-xs text-zinc-500">{String(popup.props.description ?? "")}</p>
+          <p className="text-sm font-semibold text-zinc-950">
+            {popup.content ?? "Popup title"}
+          </p>
+          <p className="text-xs text-zinc-500">
+            {String(popup.props.description ?? "")}
+          </p>
         </div>
         <button
           type="button"
@@ -1636,7 +1803,10 @@ function PopupOverlay({
           <X className="size-4" />
         </button>
       </div>
-      <div className="relative overflow-y-auto" style={{ height: "calc(78vh - 56px)" }}>
+      <div
+        className="relative overflow-y-auto"
+        style={{ height: "calc(78vh - 56px)" }}
+      >
         <div className="relative" style={{ minHeight: overlayHeight }}>
           {childrenComponents.length === 0 ? (
             <div className="absolute left-10 top-10 rounded-md border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-400">
@@ -1652,8 +1822,12 @@ function PopupOverlay({
               isSelected={selectedComponentId === component.id}
               onSelect={() => onSelect(component.id)}
               onDelete={() => onDelete(component.id)}
-              onResize={(deltaWidth, deltaHeight) => onResize(component, deltaWidth, deltaHeight)}
-              onInlineTextChange={(content) => onInlineTextChange(component.id, content)}
+              onResize={(deltaWidth, deltaHeight) =>
+                onResize(component, deltaWidth, deltaHeight)
+              }
+              onInlineTextChange={(content) =>
+                onInlineTextChange(component.id, content)
+              }
               onOpenPopup={() => undefined}
             />
           ))}
@@ -1770,7 +1944,8 @@ function PropertyPanel({
 
             {selectedComponent.type === "text" ? (
               <div className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
-                텍스트 내용은 캔버스 안의 텍스트 박스를 직접 클릭해서 수정합니다.
+                텍스트 내용은 캔버스 안의 텍스트 박스를 직접 클릭해서
+                수정합니다.
               </div>
             ) : null}
 
@@ -1840,7 +2015,9 @@ function PropertyPanel({
                   <span className="text-zinc-500">Popup Window Background</span>
                   <input
                     type="color"
-                    value={String(selectedComponent.props.popupBackgroundColor ?? "#ffffff")}
+                    value={String(
+                      selectedComponent.props.popupBackgroundColor ?? "#ffffff",
+                    )}
                     onChange={(event) =>
                       onUpdate(selectedComponent.id, {
                         props: {
@@ -2019,7 +2196,9 @@ function PropertyPanel({
                       <span className="text-zinc-500">Text Color</span>
                       <input
                         type="color"
-                        value={String(selectedComponent.props.color ?? "#111827")}
+                        value={String(
+                          selectedComponent.props.color ?? "#111827",
+                        )}
                         onChange={(event) =>
                           onUpdate(selectedComponent.id, {
                             props: {
@@ -2036,7 +2215,10 @@ function PropertyPanel({
                       value={Number(selectedComponent.props.fontSize ?? 16)}
                       onChange={(value) =>
                         onUpdate(selectedComponent.id, {
-                          props: { ...selectedComponent.props, fontSize: value },
+                          props: {
+                            ...selectedComponent.props,
+                            fontSize: value,
+                          },
                         })
                       }
                     />
@@ -2044,7 +2226,10 @@ function PropertyPanel({
                   <label className="grid gap-1">
                     <span className="text-zinc-500">Font Family</span>
                     <select
-                      value={String(selectedComponent.props.fontFamily ?? FONT_OPTIONS[0].value)}
+                      value={String(
+                        selectedComponent.props.fontFamily ??
+                          FONT_OPTIONS[0].value,
+                      )}
                       onChange={(event) =>
                         onUpdate(selectedComponent.id, {
                           props: {
@@ -2065,7 +2250,9 @@ function PropertyPanel({
                   <label className="flex items-center gap-2 rounded-md bg-zinc-50 px-3 py-2">
                     <input
                       type="checkbox"
-                      checked={Number(selectedComponent.props.fontWeight ?? 400) >= 700}
+                      checked={
+                        Number(selectedComponent.props.fontWeight ?? 400) >= 700
+                      }
                       onChange={(event) =>
                         onUpdate(selectedComponent.id, {
                           props: {
@@ -2075,27 +2262,33 @@ function PropertyPanel({
                         })
                       }
                     />
-                    <span className="text-sm font-medium text-zinc-700">Bold</span>
+                    <span className="text-sm font-medium text-zinc-700">
+                      Bold
+                    </span>
                   </label>
                 </div>
               </details>
             ) : null}
             <label className="grid min-w-0 gap-1">
               <span className="text-zinc-500">
-                {selectedComponent.type === "divider" ? "Border Color" : "Background Color"}
+                {selectedComponent.type === "divider"
+                  ? "Border Color"
+                  : "Background Color"}
               </span>
               <input
                 type="color"
                 value={String(
                   selectedComponent.type === "divider"
-                    ? selectedComponent.props.borderColor ?? "#d4d4d8"
-                    : selectedComponent.props.backgroundColor ?? "#ffffff",
+                    ? (selectedComponent.props.borderColor ?? "#d4d4d8")
+                    : (selectedComponent.props.backgroundColor ?? "#ffffff"),
                 )}
                 onChange={(event) =>
                   onUpdate(selectedComponent.id, {
                     props: {
                       ...selectedComponent.props,
-                      [selectedComponent.type === "divider" ? "borderColor" : "backgroundColor"]: event.target.value,
+                      [selectedComponent.type === "divider"
+                        ? "borderColor"
+                        : "backgroundColor"]: event.target.value,
                     },
                   })
                 }
@@ -2111,12 +2304,16 @@ function PropertyPanel({
                     onUpdate(selectedComponent.id, {
                       props: {
                         ...selectedComponent.props,
-                        backgroundColor: event.target.checked ? null : "#ffffff",
+                        backgroundColor: event.target.checked
+                          ? null
+                          : "#ffffff",
                       },
                     })
                   }
                 />
-                <span className="text-sm font-medium text-zinc-700">Transparent background</span>
+                <span className="text-sm font-medium text-zinc-700">
+                  Transparent background
+                </span>
               </label>
             ) : null}
             {selectedComponent.type === "section" ||
@@ -2133,7 +2330,9 @@ function PropertyPanel({
                   selectedComponent.type === "container" ? (
                     <NumberField
                       label="Background Opacity (%)"
-                      value={Number(selectedComponent.props.backgroundOpacity ?? 100)}
+                      value={Number(
+                        selectedComponent.props.backgroundOpacity ?? 100,
+                      )}
                       onChange={(value) =>
                         onUpdate(selectedComponent.id, {
                           props: {
@@ -2148,7 +2347,9 @@ function PropertyPanel({
                     <span className="text-zinc-500">Border Color</span>
                     <input
                       type="color"
-                      value={String(selectedComponent.props.borderColor ?? "#d4d4d8")}
+                      value={String(
+                        selectedComponent.props.borderColor ?? "#d4d4d8",
+                      )}
                       onChange={(event) =>
                         onUpdate(selectedComponent.id, {
                           props: {
@@ -2163,7 +2364,9 @@ function PropertyPanel({
                   <label className="grid min-w-0 gap-1">
                     <span className="text-zinc-500">Border Style</span>
                     <select
-                      value={String(selectedComponent.props.borderStyle ?? "dashed")}
+                      value={String(
+                        selectedComponent.props.borderStyle ?? "dashed",
+                      )}
                       onChange={(event) =>
                         onUpdate(selectedComponent.id, {
                           props: {
@@ -2356,13 +2559,13 @@ function createPdfExportNode({
       .filter((component) => !component.props.popupId)
       .sort((a, b) => getComponentLayer(a) - getComponentLayer(b))
       .forEach((component) => {
-      canvas.appendChild(
-        createPdfComponent(
-          component,
-          component.y + layout.offset + (isScrollMode ? 44 : 0),
-        ),
-      );
-    });
+        canvas.appendChild(
+          createPdfComponent(
+            component,
+            component.y + layout.offset + (isScrollMode ? 44 : 0),
+          ),
+        );
+      });
   });
 
   wrapper.appendChild(canvas);
@@ -2405,7 +2608,9 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   frame.style.color = String(component.props.color ?? "#111827");
   frame.style.fontSize = `${Number(component.props.fontSize ?? 16)}px`;
   frame.style.fontWeight = String(component.props.fontWeight ?? 400);
-  frame.style.fontFamily = String(component.props.fontFamily ?? FONT_OPTIONS[0].value);
+  frame.style.fontFamily = String(
+    component.props.fontFamily ?? FONT_OPTIONS[0].value,
+  );
 
   if (component.type === "text") {
     frame.style.padding = "8px";
@@ -2443,7 +2648,9 @@ function createPdfComponent(component: ResumeComponent, top: number) {
 
   if (component.type === "popup") {
     frame.style.border = "1px solid #e4e4e7";
-    frame.style.background = String(component.props.backgroundColor ?? "#ffffff");
+    frame.style.background = String(
+      component.props.backgroundColor ?? "#ffffff",
+    );
 
     const thumbnailUrl = String(component.props.thumbnailUrl ?? "");
     if (thumbnailUrl) {
