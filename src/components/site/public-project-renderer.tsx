@@ -278,12 +278,13 @@ function PublicComponent({
               ? normalizeAnchor(component.content ?? component.id)
               : undefined
           }
-          className="flex h-full w-full items-start rounded-md border border-dashed p-3 text-sm font-medium text-zinc-600"
+          className="flex h-full w-full items-start border border-dashed p-3 text-sm font-medium text-zinc-600"
           style={{
             backgroundColor: String(
               component.props.backgroundColor ?? "#f8fafc",
             ),
             borderColor: String(component.props.borderColor ?? "#d4d4d8"),
+            borderRadius: `${Number(component.props.borderRadius ?? 0)}px`,
           }}
         >
           {component.content}
@@ -416,13 +417,14 @@ function MobileComponentBlock({
   if (component.type === "section" || component.type === "container") {
     return (
       <div
-        className="grid w-full gap-3 rounded-md border p-3"
+        className="grid w-full gap-3  border p-3"
         style={{
           backgroundColor: String(component.props.backgroundColor ?? "#f8fafc"),
           borderColor: String(component.props.borderColor ?? "#d4d4d8"),
           borderStyle: String(
             component.props.borderStyle ?? "dashed",
           ) as CSSProperties["borderStyle"],
+          borderRadius: `${Number(component.props.borderRadius ?? 0)}px`,
           minHeight:
             children.length > 0
               ? undefined

@@ -1702,7 +1702,7 @@ function CanvasComponent({
         </button>
       ) : component.type === "section" || component.type === "container" ? (
         <div
-          className="flex h-full w-full items-start rounded-md border p-3 text-sm font-medium text-zinc-600"
+          className="flex h-full w-full items-start border p-3 text-sm font-medium text-zinc-600"
           id={
             component.type === "section"
               ? normalizeAnchor(component.content ?? component.id)
@@ -1715,6 +1715,7 @@ function CanvasComponent({
               Number(component.props.backgroundOpacity ?? 100),
             ),
             borderColor: String(component.props.borderColor ?? "#d4d4d8"),
+            borderRadius: Number(component.props.borderRadius ?? 0),
             borderStyle: String(
               component.props.borderStyle ?? "dashed",
             ) as CSSProperties["borderStyle"],
@@ -2338,6 +2339,21 @@ function PropertyPanel({
                           props: {
                             ...selectedComponent.props,
                             backgroundOpacity: clamp(value, 0, 100),
+                          },
+                        })
+                      }
+                    />
+                  ) : null}
+                  {selectedComponent.type === "section" ||
+                  selectedComponent.type === "container" ? (
+                    <NumberField
+                      label="Border Radius (px)"
+                      value={Number(selectedComponent.props.borderRadius ?? 0)}
+                      onChange={(value) =>
+                        onUpdate(selectedComponent.id, {
+                          props: {
+                            ...selectedComponent.props,
+                            borderRadius: clamp(value, 0, 64),
                           },
                         })
                       }
