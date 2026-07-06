@@ -50,6 +50,7 @@ import {
   withAlpha,
 } from "@/features/editor/view-helpers";
 import { cn } from "@/lib/utils/cn";
+import { getPublicProjectUrl } from "@/lib/utils/site-url";
 import type { ResumeComponent, ResumeProject } from "@/types/project";
 
 interface EditorShellProps {
@@ -717,7 +718,7 @@ export function EditorShell({ project }: EditorShellProps) {
   }
 
   async function shareUrl() {
-    const url = `${window.location.origin}/${editorProject.slug}`;
+    const url = getPublicProjectUrl(editorProject.slug);
 
     try {
       await navigator.clipboard.writeText(url);

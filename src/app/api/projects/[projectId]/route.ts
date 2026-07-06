@@ -36,6 +36,7 @@ export async function PATCH(
       navigation: payload.navigation,
       pages: payload.pages,
       updated_at: new Date().toISOString(),
+      published_at: new Date().toISOString(),
     })
     .eq("id", projectId)
     .eq("owner_id", user.id);

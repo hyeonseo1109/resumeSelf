@@ -16,8 +16,15 @@ create table if not exists public.projects (
   navigation jsonb not null default '[]'::jsonb,
   pages jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),
-  published_at timestamptz
+  published_at timestamptz default now()
 );
+
+alter table public.projects
+  alter column published_at set default now();
+
+update public.projects
+set published_at = coalesce(published_at, updated_at, now())
+where published_at is null;
 
 create table if not exists public.media (
   id uuid primary key default gen_random_uuid(),

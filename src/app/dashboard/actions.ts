@@ -167,6 +167,7 @@ export async function createProjectAction(formData: FormData) {
       navigation_mode: "router",
       navigation,
       pages: buildInitialPages(mode, navigation),
+      published_at: new Date().toISOString(),
     })
     .select("id")
     .single();
@@ -232,6 +233,7 @@ export async function duplicateProjectAction(formData: FormData) {
       navigation_mode: source.navigation_mode,
       navigation,
       pages: clonePagesWithNewIds((source.pages ?? []) as ResumePage[]),
+      published_at: new Date().toISOString(),
     })
     .select("id")
     .single();

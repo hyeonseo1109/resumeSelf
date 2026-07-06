@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
+import { getAuthCallbackUrl } from "@/lib/utils/site-url";
 
 export function OAuthButtons({ className }: { className?: string }) {
   const [isPending, setIsPending] = useState(false);
@@ -17,7 +18,7 @@ export function OAuthButtons({ className }: { className?: string }) {
       const { error: signInError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getAuthCallbackUrl("/dashboard"),
         },
       });
 
