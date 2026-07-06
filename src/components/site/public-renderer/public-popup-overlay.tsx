@@ -35,7 +35,7 @@ export function PublicPopupOverlay({
         </button>
       </div>
       <div className="relative overflow-y-auto" style={{ height: "calc(78vh - 56px)" }}>
-        <div className="relative hidden sm:block" style={{ minHeight: overlayHeight }}>
+        <div className="relative hidden lg:block" style={{ minHeight: overlayHeight }}>
           {components.map((component) => (
             <PublicComponent
               key={component.id}
@@ -44,7 +44,7 @@ export function PublicPopupOverlay({
             />
           ))}
         </div>
-        <div className="grid gap-3 p-4 sm:hidden">
+        <div className="grid gap-3 p-4 lg:hidden">
           {buildMobileComponentTree(components).map((node) => (
             <MobileComponentBlock key={node.component.id} node={node} />
           ))}

@@ -3,6 +3,7 @@ import {
   FONT_OPTIONS,
   PDF_PAGE_WIDTH,
   getComponentLayer,
+  getDividerStyle,
   withAlpha,
 } from "./view-helpers";
 
@@ -168,7 +169,12 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   }
 
   if (component.type === "divider") {
-    frame.style.borderTop = "1px solid #d4d4d8";
+    frame.style.display = "flex";
+    frame.style.alignItems = "center";
+    frame.style.justifyContent = "center";
+    const line = document.createElement("span");
+    Object.assign(line.style, getDividerStyle(component));
+    frame.appendChild(line);
     return frame;
   }
 

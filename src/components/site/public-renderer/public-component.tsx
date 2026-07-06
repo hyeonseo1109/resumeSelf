@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { getDividerStyle } from "@/features/editor/view-helpers";
 import type { ResumeComponent } from "@/types/project";
 import { getMobileComponentHeight, normalizeAnchor } from "./layout";
 
@@ -16,13 +17,20 @@ export function PublicComponent({
   onOpenPopup?: () => void;
 }) {
   const mobileHeight = getMobileComponentHeight(component);
+  const preserveRatioOnMobile = mobile && (component.type === "image" || component.type === "video");
 
   return (
     <div
       className={mobile ? "relative rounded-md" : "absolute rounded-md"}
       style={
         mobile
-          ? { width: "100%", height: mobileHeight }
+          ? {
+              width: "100%",
+              height: preserveRatioOnMobile ? undefined : mobileHeight,
+              aspectRatio: preserveRatioOnMobile
+                ? `${Math.max(1, component.width)} / ${Math.max(1, component.height)}`
+                : undefined,
+            }
           : {
               left: component.x,
               top: displayTop,
@@ -39,7 +47,9 @@ export function PublicComponent({
           {component.content}
         </div>
       ) : component.type === "divider" ? (
-        <div className="mt-4 border-t border-zinc-300" />
+        <div className="flex h-full w-full items-center justify-center">
+          <span style={getDividerStyle(component)} />
+        </div>
       ) : component.type === "image" && component.content ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img

@@ -17,7 +17,7 @@ export function MobileProjectView({
   onOpenPopup: (id: string) => void;
 }) {
   return (
-    <section className="mx-auto grid w-full max-w-[520px] gap-8 px-4 pb-10 sm:hidden">
+    <section className="mx-auto grid w-full max-w-[640px] gap-8 px-4 pb-10 lg:hidden">
       {pageLayouts.map((layout) => {
         const navItem = project.navigation.find((item) => item.target === layout.page.slug);
         const target = navItem?.target ?? layout.page.slug;

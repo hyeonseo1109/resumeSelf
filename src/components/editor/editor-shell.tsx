@@ -9,7 +9,6 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import {
   Download,
   Eye,
@@ -23,7 +22,11 @@ import {
   X,
 } from "lucide-react";
 import NextLink from "next/link";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type {
+  CSSProperties,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { insertableComponents } from "@/config/editor";
@@ -44,6 +47,7 @@ import {
   type SpacingGuide,
   clamp,
   getComponentLayer,
+  getDividerStyle,
   getTextStyle,
   hasTypography,
   normalizeAnchor,
@@ -63,7 +67,11 @@ export function EditorShell({ project }: EditorShellProps) {
   const activePageId = useStore(store, (state) => state.activePageId);
   const setActivePage = useStore(store, (state) => state.setActivePage);
   const addComponentAt = useStore(store, (state) => state.addComponentAt);
+  const addComponents = useStore(store, (state) => state.addComponents);
   const updateComponent = useStore(store, (state) => state.updateComponent);
+  const removeComponents = useStore(store, (state) => state.removeComponents);
+  const moveComponents = useStore(store, (state) => state.moveComponents);
+  const replaceProject = useStore(store, (state) => state.replaceProject);
   const updateCanvasBackground = useStore(
     store,
     (state) => state.updateCanvasBackground,
@@ -106,12 +114,23 @@ export function EditorShell({ project }: EditorShellProps) {
   const [smartGuidesEnabled, setSmartGuidesEnabled] = useState(true);
   const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
   const [spacingGuides, setSpacingGuides] = useState<SpacingGuide[]>([]);
+  const [guidePopupId, setGuidePopupId] = useState<string | null>(null);
+  const [canvasScale, setCanvasScale] = useState(1);
+  const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>([]);
+  const [lasso, setLasso] = useState<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
   const scrollAreaRef = useRef<HTMLElement | null>(null);
   const projectRef = useRef(editorProject);
   const saveStatusRef = useRef(saveStatus);
+  const copyBufferRef = useRef<ResumeComponent[]>([]);
+  const historyRef = useRef<ResumeProject[]>([]);
 
   const activePage =
     editorProject.pages.find((page) => page.id === activePageId) ??
@@ -205,6 +224,159 @@ export function EditorShell({ project }: EditorShellProps) {
   useEffect(() => {
     saveStatusRef.current = saveStatus;
   }, [saveStatus]);
+
+  function recordHistory() {
+    historyRef.current = [...historyRef.current.slice(-29), projectRef.current];
+  }
+
+  function undoLastChange() {
+    const previous = historyRef.current.at(-1);
+    if (!previous) {
+      return;
+    }
+
+    historyRef.current = historyRef.current.slice(0, -1);
+    replaceProject(previous);
+    setSelectedComponentIds([]);
+  }
+
+  function getPopupRelatedIds(ids: string[]) {
+    const relatedIds = new Set(ids);
+
+    ids.forEach((id) => {
+      const popup = components.find((component) => component.id === id && component.type === "popup");
+      if (!popup) {
+        return;
+      }
+
+      components
+        .filter((component) => component.props.popupId === popup.id)
+        .forEach((component) => relatedIds.add(component.id));
+    });
+
+    return Array.from(relatedIds);
+  }
+
+  function cloneComponentsForPaste(sourceComponents: ResumeComponent[]) {
+    const idMap = new Map<string, string>();
+    sourceComponents.forEach((component) => idMap.set(component.id, crypto.randomUUID()));
+
+    return sourceComponents.map((component) => {
+      const nextId = idMap.get(component.id) ?? crypto.randomUUID();
+      const popupId = typeof component.props.popupId === "string" ? component.props.popupId : null;
+      const isClonedPopupChild = Boolean(popupId && idMap.has(popupId));
+
+      return {
+        ...component,
+        id: nextId,
+        x: isClonedPopupChild ? component.x : component.x + 28,
+        y: isClonedPopupChild ? component.y : component.y + 28,
+        props: {
+          ...component.props,
+          popupId: popupId && idMap.has(popupId) ? idMap.get(popupId)! : component.props.popupId,
+        },
+      };
+    });
+  }
+
+  function copySelectedComponents() {
+    const ids = getPopupRelatedIds(selectedComponentIds);
+    copyBufferRef.current = components.filter((component) => ids.includes(component.id));
+  }
+
+  function pasteCopiedComponents() {
+    if (copyBufferRef.current.length === 0) {
+      return;
+    }
+
+    recordHistory();
+    const clonedComponents = cloneComponentsForPaste(copyBufferRef.current);
+    addComponents(clonedComponents);
+    const pastedRootIds = clonedComponents
+      .filter((component) => !component.props.popupId)
+      .map((component) => component.id);
+    const idsToSelect = pastedRootIds.length > 0 ? pastedRootIds : clonedComponents.map((component) => component.id);
+    setSelectedComponentIds(idsToSelect);
+    selectComponent(idsToSelect[0] ?? null);
+  }
+
+  function deleteSelectedComponents() {
+    if (selectedComponentIds.length === 0) {
+      return;
+    }
+
+    recordHistory();
+    const idsToRemove = getPopupRelatedIds(selectedComponentIds);
+    removeComponents(idsToRemove);
+    setSelectedComponentIds([]);
+    selectComponent(null);
+  }
+
+  function isEditableTarget(target: EventTarget | null) {
+    const element = target as HTMLElement | null;
+    return Boolean(
+      element?.closest("input, textarea, select, [contenteditable='true']"),
+    );
+  }
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (mode !== "edit" || isEditableTarget(event.target)) {
+        return;
+      }
+
+      const isModifierPressed = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+
+      if (isModifierPressed && key === "c") {
+        event.preventDefault();
+        copySelectedComponents();
+        return;
+      }
+
+      if (isModifierPressed && key === "v") {
+        event.preventDefault();
+        pasteCopiedComponents();
+        return;
+      }
+
+      if (isModifierPressed && key === "z") {
+        event.preventDefault();
+        undoLastChange();
+        return;
+      }
+
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        deleteSelectedComponents();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
+
+  useEffect(() => {
+    const observedElement = scrollAreaRef.current;
+    if (!observedElement) {
+      return;
+    }
+    const element: HTMLElement = observedElement;
+
+    function updateScale() {
+      const availableWidth = element.clientWidth - 48;
+      setCanvasScale(Math.min(1, Math.max(0.42, availableWidth / 840)));
+    }
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(element);
+    window.addEventListener("resize", updateScale);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateScale);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isScrollMode) {
@@ -309,6 +481,129 @@ export function EditorShell({ project }: EditorShellProps) {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
+  function getComparableComponents(component: ResumeComponent) {
+    if (typeof component.props.popupId === "string") {
+      return components.filter(
+        (item) =>
+          item.id !== component.id &&
+          item.props.popupId === component.props.popupId,
+      );
+    }
+
+    return components.filter(
+      (item) => item.id !== component.id && !item.props.popupId,
+    );
+  }
+
+  function getInteractionScale(component: ResumeComponent) {
+    return typeof component.props.popupId === "string" ? 1 : canvasScale;
+  }
+
+  function getCanvasPoint(event: PointerEvent | ReactPointerEvent<HTMLElement>) {
+    const canvas = document.getElementById("resume-canvas");
+    const rect = canvas?.getBoundingClientRect();
+
+    if (!rect) {
+      return { x: 0, y: 0 };
+    }
+
+    return {
+      x: (event.clientX - rect.left) / canvasScale,
+      y: (event.clientY - rect.top) / canvasScale,
+    };
+  }
+
+  function getLassoRect(selection: NonNullable<typeof lasso>) {
+    return {
+      left: Math.min(selection.startX, selection.currentX),
+      top: Math.min(selection.startY, selection.currentY),
+      right: Math.max(selection.startX, selection.currentX),
+      bottom: Math.max(selection.startY, selection.currentY),
+    };
+  }
+
+  function rectsIntersect(
+    a: { left: number; top: number; right: number; bottom: number },
+    b: { left: number; top: number; right: number; bottom: number },
+  ) {
+    return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+  }
+
+  function handleComponentSelect(
+    id: string,
+    event?: ReactMouseEvent<HTMLDivElement>,
+  ) {
+    if (event?.shiftKey || event?.metaKey || event?.ctrlKey) {
+      setSelectedComponentIds((ids) => {
+        const nextIds = ids.includes(id)
+          ? ids.filter((selectedId) => selectedId !== id)
+          : [...ids, id];
+        selectComponent(nextIds.at(-1) ?? null);
+        return nextIds;
+      });
+      return;
+    }
+
+    setSelectedComponentIds([id]);
+    selectComponent(id);
+  }
+
+  function handleCanvasPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (
+      mode !== "edit" ||
+      event.button !== 0 ||
+      (event.target as HTMLElement).closest(
+        "[data-component-id], [data-editor-control], button, a, input, textarea, select",
+      )
+    ) {
+      return;
+    }
+
+    const start = getCanvasPoint(event);
+    setSelectedComponentIds([]);
+    selectComponent(null);
+    setLasso({ startX: start.x, startY: start.y, currentX: start.x, currentY: start.y });
+
+    function handlePointerMove(pointerEvent: PointerEvent) {
+      const point = getCanvasPoint(pointerEvent);
+      setLasso((current) =>
+        current
+          ? { ...current, currentX: point.x, currentY: point.y }
+          : current,
+      );
+    }
+
+    function handlePointerUp(pointerEvent: PointerEvent) {
+      const point = getCanvasPoint(pointerEvent);
+      const selection = {
+        startX: start.x,
+        startY: start.y,
+        currentX: point.x,
+        currentY: point.y,
+      };
+      const rect = getLassoRect(selection);
+      const nextIds = renderItems
+        .filter(({ component, displayTop }) =>
+          rectsIntersect(rect, {
+            left: component.x,
+            top: displayTop,
+            right: component.x + component.width,
+            bottom: displayTop + component.height,
+          }),
+        )
+        .map(({ component }) => component.id);
+
+      setSelectedComponentIds(nextIds);
+      selectComponent(nextIds[0] ?? null);
+      setLasso(null);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
   function getSmartSnap(
     component: ResumeComponent,
     nextX: number,
@@ -334,9 +629,7 @@ export function EditorShell({ project }: EditorShellProps) {
     let snappedHeight = nextHeight;
     const canvasTargetsX = [0, 420, 840];
     const canvasTargetsY = [64, canvasHeight / 2, canvasHeight];
-    const otherComponents = components.filter(
-      (item) => item.id !== component.id && !item.props.popupId,
-    );
+    const otherComponents = getComparableComponents(component);
     const xTargets = [
       ...canvasTargetsX,
       ...otherComponents.flatMap((item) => [
@@ -388,8 +681,7 @@ export function EditorShell({ project }: EditorShellProps) {
       break;
     }
 
-    const horizontalPeers = components
-      .filter((item) => item.id !== component.id && !item.props.popupId)
+    const horizontalPeers = otherComponents
       .filter(
         (item) => nextY + nextHeight > item.y && nextY < item.y + item.height,
       )
@@ -421,8 +713,30 @@ export function EditorShell({ project }: EditorShellProps) {
       }
     }
 
-    const verticalPeers = components
-      .filter((item) => item.id !== component.id && !item.props.popupId)
+    for (let index = 0; index < horizontalPeers.length - 1; index += 1) {
+      const first = horizontalPeers[index];
+      const second = horizontalPeers[index + 1];
+      const gap = second.x - (first.x + first.width);
+      if (gap < 0) continue;
+
+      const afterSecondX = second.x + second.width + gap;
+      const beforeFirstX = first.x - nextWidth - gap;
+      if (Math.abs(afterSecondX - nextX) <= tolerance) {
+        snappedX = Math.round(afterSecondX);
+        guides.push({ axis: "x", position: second.x + second.width });
+        guides.push({ axis: "x", position: afterSecondX });
+        break;
+      }
+
+      if (Math.abs(beforeFirstX - nextX) <= tolerance) {
+        snappedX = Math.round(beforeFirstX);
+        guides.push({ axis: "x", position: beforeFirstX + nextWidth });
+        guides.push({ axis: "x", position: first.x });
+        break;
+      }
+    }
+
+    const verticalPeers = otherComponents
       .filter(
         (item) => nextX + nextWidth > item.x && nextX < item.x + item.width,
       )
@@ -446,6 +760,29 @@ export function EditorShell({ project }: EditorShellProps) {
         guides.push({ axis: "y", position: topBottom });
         guides.push({ axis: "y", position: bottom.y });
         topIndex = verticalPeers.length;
+        break;
+      }
+    }
+
+    for (let index = 0; index < verticalPeers.length - 1; index += 1) {
+      const first = verticalPeers[index];
+      const second = verticalPeers[index + 1];
+      const gap = second.y - (first.y + first.height);
+      if (gap < 0) continue;
+
+      const afterSecondY = second.y + second.height + gap;
+      const beforeFirstY = first.y - nextHeight - gap;
+      if (Math.abs(afterSecondY - nextY) <= tolerance) {
+        snappedY = Math.round(afterSecondY);
+        guides.push({ axis: "y", position: second.y + second.height });
+        guides.push({ axis: "y", position: afterSecondY });
+        break;
+      }
+
+      if (Math.abs(beforeFirstY - nextY) <= tolerance) {
+        snappedY = Math.round(beforeFirstY);
+        guides.push({ axis: "y", position: beforeFirstY + nextHeight });
+        guides.push({ axis: "y", position: first.y });
         break;
       }
     }
@@ -478,9 +815,7 @@ export function EditorShell({ project }: EditorShellProps) {
       midX: nextX + nextWidth / 2,
       midY: nextY + nextHeight / 2,
     };
-    const otherComponents = components.filter(
-      (item) => item.id !== component.id && !item.props.popupId,
-    );
+    const otherComponents = getComparableComponents(component);
     const horizontalRaw: SpacingGuide[] = [];
 
     for (const item of otherComponents) {
@@ -573,11 +908,12 @@ export function EditorShell({ project }: EditorShellProps) {
 
     const snap = getSmartSnap(
       component,
-      component.x + event.delta.x,
-      component.y + event.delta.y,
+      component.x + event.delta.x / getInteractionScale(component),
+      component.y + event.delta.y / getInteractionScale(component),
     );
     setGuideLines(snap.guides);
     setSpacingGuides(getSpacingGuides(component, snap.x, snap.y));
+    setGuidePopupId(typeof component.props.popupId === "string" ? component.props.popupId : null);
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -590,15 +926,26 @@ export function EditorShell({ project }: EditorShellProps) {
 
     const snap = getSmartSnap(
       component,
-      component.x + delta.x,
-      component.y + delta.y,
+      component.x + delta.x / getInteractionScale(component),
+      component.y + delta.y / getInteractionScale(component),
     );
     setGuideLines(snap.guides);
     setSpacingGuides(getSpacingGuides(component, snap.x, snap.y));
+    setGuidePopupId(typeof component.props.popupId === "string" ? component.props.popupId : null);
     window.setTimeout(() => {
       setGuideLines([]);
       setSpacingGuides([]);
+      setGuidePopupId(null);
     }, 450);
+    recordHistory();
+    if (selectedComponentIds.length > 1 && selectedComponentIds.includes(component.id)) {
+      moveComponents(selectedComponentIds, {
+        x: delta.x / getInteractionScale(component),
+        y: delta.y / getInteractionScale(component),
+      });
+      return;
+    }
+
     updateComponent(component.id, {
       x: snap.x,
       y: snap.y,
@@ -610,8 +957,9 @@ export function EditorShell({ project }: EditorShellProps) {
     deltaWidth: number,
     deltaHeight: number,
   ) {
-    const nextWidth = Math.max(48, component.width + deltaWidth);
-    const nextHeight = Math.max(36, component.height + deltaHeight);
+    const scale = getInteractionScale(component);
+    const nextWidth = Math.max(48, component.width + deltaWidth / scale);
+    const nextHeight = Math.max(36, component.height + deltaHeight / scale);
     const snap = getSmartSnap(
       component,
       component.x,
@@ -629,10 +977,16 @@ export function EditorShell({ project }: EditorShellProps) {
         snap.height,
       ),
     );
+    setGuidePopupId(typeof component.props.popupId === "string" ? component.props.popupId : null);
     updateComponent(component.id, {
       width: snap.width,
       height: snap.height,
     });
+    window.setTimeout(() => {
+      setGuideLines([]);
+      setSpacingGuides([]);
+      setGuidePopupId(null);
+    }, 450);
   }
 
   function addComponentToVisibleCenter(
@@ -652,7 +1006,7 @@ export function EditorShell({ project }: EditorShellProps) {
                 : { width: 360, height: 140 };
     const canvas = document.getElementById("resume-canvas");
     const canvasTop = canvas?.getBoundingClientRect().top ?? 0;
-    const visibleCenter = window.innerHeight / 2 - canvasTop;
+    const visibleCenter = (window.innerHeight / 2 - canvasTop) / canvasScale;
     const x = Math.max(24, Math.round(420 - size.width / 2));
     const y = Math.max(88, Math.round(visibleCenter - size.height / 2));
 
@@ -925,144 +1279,100 @@ export function EditorShell({ project }: EditorShellProps) {
             onDragCancel={() => {
               setGuideLines([]);
               setSpacingGuides([]);
+              setGuidePopupId(null);
             }}
           >
             <div
-              id="resume-canvas"
-              className="relative mx-auto w-full max-w-[840px] bg-white shadow-sm ring-1 ring-zinc-200"
+              className="relative mx-auto"
               style={{
-                minHeight: canvasHeight,
-                backgroundColor: canvasBackground,
+                width: 840 * canvasScale,
+                minHeight: canvasHeight * canvasScale,
               }}
             >
-              <SiteHeader
-                project={editorProject}
-                mode={mode}
-                activeTarget={activePage?.slug}
-                onNavigate={handleHeaderNavigation}
-                onTitleClick={() => {
-                  if (isScrollMode) {
-                    scrollAreaRef.current?.scrollTo({
-                      top: 0,
-                      behavior: "smooth",
-                    });
-                    return;
-                  }
-
-                  const homePage = editorProject.pages[0];
-                  if (homePage) {
-                    setActivePage(homePage.id);
-                  }
+              <div
+                id="resume-canvas"
+                className="relative w-[840px] origin-top-left bg-white shadow-sm ring-1 ring-zinc-200"
+                onPointerDown={handleCanvasPointerDown}
+                style={{
+                  minHeight: canvasHeight,
+                  backgroundColor: canvasBackground,
+                  transform: `scale(${canvasScale})`,
                 }}
-              />
-              {isScrollMode
-                ? pageLayouts.map((layout) => {
-                    const navItem = editorProject.navigation.find(
-                      (item) => item.target === layout.page.slug,
-                    );
-                    const target = navItem?.target ?? layout.page.slug;
-                    const label = navItem?.label ?? layout.page.title;
-
-                    return (
-                      <div
-                        key={layout.page.id}
-                        id={`editor-section-${target}`}
-                        className="absolute left-0 w-full scroll-mt-6 px-12 pt-4"
-                        style={{ top: layout.offset + 12, height: 44 }}
-                      >
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-                          {label}
-                        </p>
-                      </div>
-                    );
-                  })
-                : null}
-              {mode === "edit" && canvasHeight > PDF_PAGE_HEIGHT ? (
-                <PageBreakGuides canvasHeight={canvasHeight} />
-              ) : null}
-              {renderItems.map(({ component, displayTop }) => (
-                <CanvasComponent
-                  key={component.id}
-                  component={component}
-                  displayTop={displayTop}
-                  preview={mode === "preview"}
-                  isSelected={selectedComponentId === component.id}
-                  onSelect={() => selectComponent(component.id)}
-                  onDelete={() => removeComponent(component.id)}
-                  onResize={(deltaWidth, deltaHeight) =>
-                    resizeComponent(component, deltaWidth, deltaHeight)
-                  }
-                  onInlineTextChange={(content) =>
-                    updateComponent(component.id, { content })
-                  }
-                  onOpenPopup={() => setOpenPopup(component.id)}
-                />
-              ))}
-              {guideLines.map((guide, index) => (
-                <div
-                  key={`${guide.axis}-${guide.position}-${index}`}
-                  className="pointer-events-none absolute z-30 border-emerald-500"
-                  style={
-                    guide.axis === "x"
-                      ? {
-                          left: guide.position,
-                          top: 0,
-                          bottom: 0,
-                          borderLeftWidth: 1,
-                          borderStyle: "dashed",
-                        }
-                      : {
-                          top: guide.position,
-                          left: 0,
-                          right: 0,
-                          borderTopWidth: 1,
-                          borderStyle: "dashed",
-                        }
-                  }
-                />
-              ))}
-              {spacingGuides.map((guide, index) => (
-                <div
-                  key={`${guide.axis}-${guide.start}-${guide.end}-${index}`}
-                  className="pointer-events-none absolute z-30"
-                  style={
-                    guide.axis === "x"
-                      ? {
-                          left: Math.min(guide.start, guide.end),
-                          top: guide.cross,
-                          width: Math.abs(guide.end - guide.start),
-                          height: 1,
-                          borderTop: "1px solid #10b981",
-                        }
-                      : {
-                          left: guide.cross,
-                          top: Math.min(guide.start, guide.end),
-                          width: 1,
-                          height: Math.abs(guide.end - guide.start),
-                          borderLeft: "1px solid #10b981",
-                        }
-                  }
-                >
-                  <span
-                    className="absolute rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm"
-                    style={
-                      guide.axis === "x"
-                        ? {
-                            left: "50%",
-                            top: -18,
-                            transform: "translateX(-50%)",
-                          }
-                        : {
-                            left: 6,
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                          }
+              >
+                <SiteHeader
+                  project={editorProject}
+                  mode={mode}
+                  activeTarget={activePage?.slug}
+                  onNavigate={handleHeaderNavigation}
+                  onTitleClick={() => {
+                    if (isScrollMode) {
+                      scrollAreaRef.current?.scrollTo({
+                        top: 0,
+                        behavior: "smooth",
+                      });
+                      return;
                     }
-                  >
-                    {guide.distance}px
-                  </span>
-                </div>
-              ))}
+
+                    const homePage = editorProject.pages[0];
+                    if (homePage) {
+                      setActivePage(homePage.id);
+                    }
+                  }}
+                />
+                {isScrollMode
+                  ? pageLayouts.map((layout) => {
+                      const navItem = editorProject.navigation.find(
+                        (item) => item.target === layout.page.slug,
+                      );
+                      const target = navItem?.target ?? layout.page.slug;
+                      const label = navItem?.label ?? layout.page.title;
+
+                      return (
+                        <div
+                          key={layout.page.id}
+                          id={`editor-section-${target}`}
+                          className="absolute left-0 w-full scroll-mt-6 px-12 pt-4"
+                          style={{ top: layout.offset + 12, height: 44 }}
+                        >
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                            {label}
+                          </p>
+                        </div>
+                      );
+                    })
+                  : null}
+                {mode === "edit" && canvasHeight > PDF_PAGE_HEIGHT ? (
+                  <PageBreakGuides canvasHeight={canvasHeight} />
+                ) : null}
+                {renderItems.map(({ component, displayTop }) => (
+                  <CanvasComponent
+                    key={component.id}
+                    component={component}
+                    displayTop={displayTop}
+                    preview={mode === "preview"}
+                    isSelected={selectedComponentIds.includes(component.id)}
+                    onSelect={(event) => handleComponentSelect(component.id, event)}
+                    onDelete={() => {
+                      recordHistory();
+                      removeComponents(getPopupRelatedIds([component.id]));
+                      setSelectedComponentIds((ids) => ids.filter((id) => id !== component.id));
+                    }}
+                    onResize={(deltaWidth, deltaHeight) =>
+                      resizeComponent(component, deltaWidth, deltaHeight)
+                    }
+                    onResizeStart={recordHistory}
+                    onInlineTextChange={(content) =>
+                      updateComponent(component.id, { content })
+                    }
+                    onOpenPopup={() => setOpenPopup(component.id)}
+                    interactionScale={canvasScale}
+                  />
+                ))}
+                {!guidePopupId ? (
+                  <GuideOverlay guideLines={guideLines} spacingGuides={spacingGuides} />
+                ) : null}
+                {lasso ? <LassoOverlay lasso={lasso} /> : null}
+              </div>
               {popupComponent ? (
                 <PopupOverlay
                   popup={popupComponent}
@@ -1076,6 +1386,8 @@ export function EditorShell({ project }: EditorShellProps) {
                   onInlineTextChange={(id, content) =>
                     updateComponent(id, { content })
                   }
+                  guideLines={guidePopupId === popupComponent.id ? guideLines : []}
+                  spacingGuides={guidePopupId === popupComponent.id ? spacingGuides : []}
                 />
               ) : null}
             </div>
@@ -1087,12 +1399,17 @@ export function EditorShell({ project }: EditorShellProps) {
             components={components}
             selectedComponent={selectedComponent}
             onUpdate={updateComponent}
-            onDelete={removeComponent}
             onUpload={uploadMedia}
             project={editorProject}
             onSetNavigationMode={setNavigationMode}
             canvasBackground={canvasBackground}
             onUpdateCanvasBackground={updateCanvasBackground}
+            onDelete={(id) => {
+              recordHistory();
+              removeComponents(getPopupRelatedIds([id]));
+              setSelectedComponentIds((ids) => ids.filter((selectedId) => selectedId !== id));
+              selectComponent(null);
+            }}
           />
         ) : null}
       </div>
@@ -1140,6 +1457,107 @@ function PageBreakGuides({ canvasHeight }: { canvasHeight: number }) {
   );
 }
 
+function GuideOverlay({
+  guideLines,
+  spacingGuides,
+}: {
+  guideLines: GuideLine[];
+  spacingGuides: SpacingGuide[];
+}) {
+  return (
+    <>
+      {guideLines.map((guide, index) => (
+        <div
+          key={`${guide.axis}-${guide.position}-${index}`}
+          className="pointer-events-none absolute z-[90] border-emerald-500"
+          style={
+            guide.axis === "x"
+              ? {
+                  left: guide.position,
+                  top: 0,
+                  bottom: 0,
+                  borderLeftWidth: 1,
+                  borderStyle: "dashed",
+                }
+              : {
+                  top: guide.position,
+                  left: 0,
+                  right: 0,
+                  borderTopWidth: 1,
+                  borderStyle: "dashed",
+                }
+          }
+        />
+      ))}
+      {spacingGuides.map((guide, index) => (
+        <div
+          key={`${guide.axis}-${guide.start}-${guide.end}-${index}`}
+          className="pointer-events-none absolute z-[91]"
+          style={
+            guide.axis === "x"
+              ? {
+                  left: Math.min(guide.start, guide.end),
+                  top: guide.cross,
+                  width: Math.abs(guide.end - guide.start),
+                  height: 1,
+                  borderTop: "1px solid #10b981",
+                }
+              : {
+                  left: guide.cross,
+                  top: Math.min(guide.start, guide.end),
+                  width: 1,
+                  height: Math.abs(guide.end - guide.start),
+                  borderLeft: "1px solid #10b981",
+                }
+          }
+        >
+          <span
+            className="absolute rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm"
+            style={
+              guide.axis === "x"
+                ? {
+                    left: "50%",
+                    top: -18,
+                    transform: "translateX(-50%)",
+                  }
+                : {
+                    left: 6,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                  }
+            }
+          >
+            {guide.distance}px
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function LassoOverlay({
+  lasso,
+}: {
+  lasso: {
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  };
+}) {
+  const left = Math.min(lasso.startX, lasso.currentX);
+  const top = Math.min(lasso.startY, lasso.currentY);
+  const width = Math.abs(lasso.currentX - lasso.startX);
+  const height = Math.abs(lasso.currentY - lasso.startY);
+
+  return (
+    <div
+      className="pointer-events-none absolute z-[95] border border-emerald-500 bg-emerald-400/10"
+      style={{ left, top, width, height }}
+    />
+  );
+}
+
 function CanvasComponent({
   component,
   displayTop,
@@ -1148,18 +1566,22 @@ function CanvasComponent({
   onSelect,
   onDelete,
   onResize,
+  onResizeStart,
   onInlineTextChange,
   onOpenPopup,
+  interactionScale,
 }: {
   component: ResumeComponent;
   displayTop: number;
   preview: boolean;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: (event?: ReactMouseEvent<HTMLDivElement>) => void;
   onDelete: () => void;
   onResize: (deltaWidth: number, deltaHeight: number) => void;
+  onResizeStart: () => void;
   onInlineTextChange: (content: string) => void;
   onOpenPopup: () => void;
+  interactionScale: number;
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: component.id,
@@ -1172,7 +1594,9 @@ function CanvasComponent({
     height: component.height,
     left: component.x,
     top: displayTop,
-    transform: CSS.Translate.toString(transform),
+    transform: transform
+      ? `translate3d(${transform.x / interactionScale}px, ${transform.y / interactionScale}px, 0)`
+      : undefined,
     zIndex: getComponentLayer(component),
     backgroundColor:
       component.type === "image" || component.type === "video"
@@ -1196,6 +1620,7 @@ function CanvasComponent({
   function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
     event.stopPropagation();
+    onResizeStart();
 
     const startX = event.clientX;
     const startY = event.clientY;
@@ -1216,13 +1641,14 @@ function CanvasComponent({
   return (
     <div
       ref={setNodeRef}
+      data-component-id={component.id}
       style={style}
       {...listeners}
       {...attributes}
       onMouseDown={(event) => {
         if (!preview) {
           event.stopPropagation();
-          onSelect();
+          onSelect(event);
         }
       }}
       className={cn(
@@ -1275,12 +1701,9 @@ function CanvasComponent({
           />
         </div>
       ) : component.type === "divider" ? (
-        <div
-          className="mt-4 border-t"
-          style={{
-            borderColor: String(component.props.borderColor ?? "#d4d4d8"),
-          }}
-        />
+        <div className="flex h-full w-full items-center justify-center">
+          <span style={getDividerStyle(component)} />
+        </div>
       ) : component.type === "image" && component.content ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -1441,6 +1864,8 @@ function PopupOverlay({
   onDelete,
   onResize,
   onInlineTextChange,
+  guideLines,
+  spacingGuides,
 }: {
   popup: ResumeComponent;
   childrenComponents: ResumeComponent[];
@@ -1455,6 +1880,8 @@ function PopupOverlay({
     deltaHeight: number,
   ) => void;
   onInlineTextChange: (id: string, content: string) => void;
+  guideLines: GuideLine[];
+  spacingGuides: SpacingGuide[];
 }) {
   const overlayHeight = Math.max(
     560,
@@ -1468,7 +1895,7 @@ function PopupOverlay({
 
   return (
     <div
-      className="fixed inset-x-4 top-20 z-[70] mx-auto max-h-[78vh] max-w-[840px] overflow-hidden rounded-lg border border-zinc-200 shadow-2xl"
+      className="fixed inset-x-3 top-20 z-[70] mx-auto max-h-[78vh] w-[calc(100vw-1.5rem)] max-w-[840px] overflow-hidden rounded-lg border border-zinc-200 shadow-2xl sm:inset-x-6 sm:w-[calc(100vw-3rem)]"
       style={{ backgroundColor: popupWindowBackground }}
     >
       <div
@@ -1507,21 +1934,27 @@ function PopupOverlay({
           {childrenComponents.map((component) => (
             <CanvasComponent
               key={component.id}
-              component={component}
-              displayTop={component.y}
-              preview={preview}
-              isSelected={selectedComponentId === component.id}
-              onSelect={() => onSelect(component.id)}
+                component={component}
+                displayTop={component.y}
+                preview={preview}
+                isSelected={selectedComponentId === component.id}
+              onSelect={(event) => {
+                event?.stopPropagation();
+                onSelect(component.id);
+              }}
               onDelete={() => onDelete(component.id)}
               onResize={(deltaWidth, deltaHeight) =>
                 onResize(component, deltaWidth, deltaHeight)
               }
+              onResizeStart={() => undefined}
               onInlineTextChange={(content) =>
                 onInlineTextChange(component.id, content)
               }
               onOpenPopup={() => undefined}
+              interactionScale={1}
             />
           ))}
+          <GuideOverlay guideLines={guideLines} spacingGuides={spacingGuides} />
         </div>
       </div>
     </div>
@@ -1986,6 +2419,70 @@ function PropertyPanel({
                 className="h-9 w-full rounded-md border border-zinc-200"
               />
             </label>
+            {selectedComponent.type === "divider" ? (
+              <details className="rounded-md border border-zinc-200 p-3" open>
+                <summary className="cursor-pointer text-sm font-medium text-zinc-700">
+                  Divider Style
+                </summary>
+                <div className="mt-3 grid gap-3">
+                  <label className="grid min-w-0 gap-1">
+                    <span className="text-zinc-500">Direction</span>
+                    <select
+                      value={String(selectedComponent.props.orientation ?? "horizontal")}
+                      onChange={(event) =>
+                        onUpdate(selectedComponent.id, {
+                          props: {
+                            ...selectedComponent.props,
+                            orientation: event.target.value,
+                          },
+                        })
+                      }
+                      className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
+                    >
+                      <option value="horizontal">가로</option>
+                      <option value="vertical">세로</option>
+                    </select>
+                  </label>
+                  <label className="grid min-w-0 gap-1">
+                    <span className="text-zinc-500">Line Style</span>
+                    <select
+                      value={String(selectedComponent.props.lineStyle ?? "solid")}
+                      onChange={(event) =>
+                        onUpdate(selectedComponent.id, {
+                          props: {
+                            ...selectedComponent.props,
+                            lineStyle: event.target.value,
+                          },
+                        })
+                      }
+                      className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
+                    >
+                      <option value="solid">실선</option>
+                      <option value="dashed">점선</option>
+                    </select>
+                  </label>
+                  <label className="grid min-w-0 gap-1">
+                    <span className="text-zinc-500">Thickness</span>
+                    <select
+                      value={String(selectedComponent.props.thickness ?? "thin")}
+                      onChange={(event) =>
+                        onUpdate(selectedComponent.id, {
+                          props: {
+                            ...selectedComponent.props,
+                            thickness: event.target.value,
+                          },
+                        })
+                      }
+                      className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
+                    >
+                      <option value="thin">얇음</option>
+                      <option value="medium">중간</option>
+                      <option value="thick">두꺼움</option>
+                    </select>
+                  </label>
+                </div>
+              </details>
+            ) : null}
             {selectedComponent.type === "text" ? (
               <label className="flex items-center gap-2 rounded-md bg-zinc-50 px-3 py-2">
                 <input

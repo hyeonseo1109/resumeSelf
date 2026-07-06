@@ -50,7 +50,11 @@ interface EditorState {
   addComponent: (type: ComponentType) => void;
   addComponentAt: (type: ComponentType, position: { x: number; y: number }) => void;
   updateComponent: (id: string, patch: Partial<ResumeComponent>) => void;
+  addComponents: (components: ResumeComponent[]) => void;
+  removeComponents: (ids: string[]) => void;
+  moveComponents: (ids: string[], delta: { x: number; y: number }) => void;
   removeComponent: (id: string) => void;
+  replaceProject: (project: ResumeProject) => void;
   updateCanvasBackground: (color: string) => void;
   addNavigationPage: () => void;
   updateNavigationItem: (id: string, patch: { label?: string; target?: string }) => void;
@@ -114,6 +118,13 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
     props:
       type === "link"
         ? { href: "https://example.com" }
+        : type === "divider"
+          ? {
+              orientation: "horizontal",
+              lineStyle: "solid",
+              thickness: "thin",
+              borderColor: "#d4d4d8",
+            }
         : type === "image"
           ? { objectFit: "cover", objectPositionX: 50, objectPositionY: 50 }
           : type === "section" || type === "container"
@@ -210,6 +221,13 @@ export function createEditorStore(initialProject: ResumeProject) {
     markSaving: () => set({ saveStatus: "saving" }),
     markSaved: () => set({ saveStatus: "saved" }),
     markSaveError: () => set({ saveStatus: "error" }),
+    replaceProject: (project) =>
+      set({
+        project,
+        saveStatus: "dirty",
+        selectedComponentId: null,
+        openPopupId: null,
+      }),
     addComponent: (type) =>
       set((state) => addComponentToState(state, type, undefined)),
     addComponentAt: (type, position) =>
@@ -264,6 +282,80 @@ export function createEditorStore(initialProject: ResumeProject) {
 
                   return component;
                 }),
+              })),
+            })),
+          },
+        };
+      }),
+    addComponents: (components) =>
+      set((state) => {
+        const activePage = state.project.pages.find((page) => page.id === state.activePageId) ?? state.project.pages[0];
+
+        return {
+          saveStatus: "dirty",
+          selectedComponentId: components[0]?.id ?? null,
+          project: {
+            ...state.project,
+            pages: state.project.pages.map((page) =>
+              page.id === activePage.id
+                ? {
+                    ...page,
+                    sections: page.sections.map((section, index) =>
+                      index === 0
+                        ? { ...section, components: [...section.components, ...components] }
+                        : section,
+                    ),
+                  }
+                : page,
+            ),
+          },
+        };
+      }),
+    removeComponents: (ids) =>
+      set((state) => {
+        const removeIds = new Set(ids);
+        const selectedComponent =
+          state.selectedComponentId && removeIds.has(state.selectedComponentId)
+            ? null
+            : state.selectedComponentId;
+        const openPopupId =
+          state.openPopupId && removeIds.has(state.openPopupId)
+            ? null
+            : state.openPopupId;
+
+        return {
+          saveStatus: "dirty",
+          selectedComponentId: selectedComponent,
+          openPopupId,
+          project: {
+            ...state.project,
+            pages: state.project.pages.map((page) => ({
+              ...page,
+              sections: page.sections.map((section) => ({
+                ...section,
+                components: section.components.filter((component) => !removeIds.has(component.id)),
+              })),
+            })),
+          },
+        };
+      }),
+    moveComponents: (ids, delta) =>
+      set((state) => {
+        const movingIds = new Set(ids);
+
+        return {
+          saveStatus: "dirty",
+          project: {
+            ...state.project,
+            pages: state.project.pages.map((page) => ({
+              ...page,
+              sections: page.sections.map((section) => ({
+                ...section,
+                components: section.components.map((component) =>
+                  movingIds.has(component.id)
+                    ? { ...component, x: component.x + delta.x, y: component.y + delta.y }
+                    : component,
+                ),
               })),
             })),
           },

@@ -80,3 +80,27 @@ export function hasTypography(component: ResumeComponent) {
     component.type,
   );
 }
+
+export function getDividerStyle(component: ResumeComponent): CSSProperties {
+  const orientation = String(component.props.orientation ?? "horizontal");
+  const lineStyle = String(component.props.lineStyle ?? "solid");
+  const thickness = String(component.props.thickness ?? "thin");
+  const width = thickness === "thick" ? 4 : thickness === "medium" ? 2 : 1;
+  const color = String(component.props.borderColor ?? "#d4d4d8");
+
+  return orientation === "vertical"
+    ? {
+        width: 0,
+        height: "100%",
+        borderLeftWidth: width,
+        borderLeftStyle: lineStyle as CSSProperties["borderLeftStyle"],
+        borderLeftColor: color,
+      }
+    : {
+        width: "100%",
+        height: 0,
+        borderTopWidth: width,
+        borderTopStyle: lineStyle as CSSProperties["borderTopStyle"],
+        borderTopColor: color,
+      };
+}

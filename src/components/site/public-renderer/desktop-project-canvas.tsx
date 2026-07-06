@@ -22,7 +22,7 @@ export function DesktopProjectCanvas({
 }) {
   return (
     <section
-      className="relative mx-auto hidden px-0 sm:block"
+      className="relative mx-auto hidden px-0 lg:block"
       style={{
         width: PUBLIC_CANVAS_WIDTH,
         minHeight: canvasHeight,
