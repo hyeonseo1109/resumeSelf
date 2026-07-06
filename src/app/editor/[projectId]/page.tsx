@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { EditorShell } from "@/components/editor/editor-shell";
+import { EditorShellLoader } from "@/components/editor/editor-shell-loader";
 import { getCurrentUser, getProjectById } from "@/server/projects";
 
 export default async function EditorPage({ params }: { params: Promise<{ projectId: string }> }) {
@@ -16,5 +16,5 @@ export default async function EditorPage({ params }: { params: Promise<{ project
     notFound();
   }
 
-  return <EditorShell project={project} />;
+  return <EditorShellLoader project={project} />;
 }

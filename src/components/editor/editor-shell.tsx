@@ -3,92 +3,57 @@
 import {
   DndContext,
   PointerSensor,
-  closestCenter,
   type DragEndEvent,
   type DragMoveEvent,
   useDraggable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  ChevronDown,
   Download,
   Eye,
   LayoutDashboard,
   Link2,
   Magnet,
   Pencil,
-  Plus,
   Save,
   Trash2,
   Upload,
   X,
 } from "lucide-react";
 import NextLink from "next/link";
-import type {
-  CSSProperties,
-  PointerEvent as ReactPointerEvent,
-  ReactNode,
-} from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { insertableComponents } from "@/config/editor";
+import { NumberField } from "@/components/editor/number-field";
+import { RouteSwitcher } from "@/components/editor/route-switcher";
+import { ScrollToc } from "@/components/editor/scroll-toc";
+import { SiteHeader } from "@/components/editor/site-header";
+import {
+  createPdfExportNode,
+  waitForPdfNode,
+} from "@/features/editor/pdf-export";
 import { createEditorStore } from "@/features/editor/store";
+import {
+  FONT_OPTIONS,
+  PDF_PAGE_HEIGHT,
+  PDF_PAGE_WIDTH,
+  type GuideLine,
+  type SpacingGuide,
+  clamp,
+  getComponentLayer,
+  getTextStyle,
+  hasTypography,
+  normalizeAnchor,
+  withAlpha,
+} from "@/features/editor/view-helpers";
 import { cn } from "@/lib/utils/cn";
 import type { ResumeComponent, ResumeProject } from "@/types/project";
 
 interface EditorShellProps {
   project: ResumeProject;
-}
-
-interface GuideLine {
-  axis: "x" | "y";
-  position: number;
-}
-
-interface SpacingGuide {
-  axis: "x" | "y";
-  start: number;
-  end: number;
-  cross: number;
-  distance: number;
-}
-
-const FONT_OPTIONS = [
-  { label: "System", value: "Arial, Helvetica, sans-serif" },
-  { label: "Serif", value: "Georgia, 'Times New Roman', serif" },
-  { label: "Mono", value: "'SFMono-Regular', Consolas, monospace" },
-  { label: "Pretendard", value: "Pretendard, Arial, sans-serif" },
-  { label: "Noto Sans KR", value: "'Noto Sans KR', Arial, sans-serif" },
-];
-const PDF_PAGE_WIDTH = 840;
-const PDF_PAGE_HEIGHT = 1188;
-
-function withAlpha(hex: string, opacity: number) {
-  const normalized = hex.replace("#", "");
-  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
-    return hex;
-  }
-
-  const r = Number.parseInt(normalized.slice(0, 2), 16);
-  const g = Number.parseInt(normalized.slice(2, 4), 16);
-  const b = Number.parseInt(normalized.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${clamp(opacity, 0, 100) / 100})`;
-}
-
-function getTextStyle(component: ResumeComponent): CSSProperties {
-  return {
-    color: String(component.props.color ?? "#111827"),
-    fontSize: Number(component.props.fontSize ?? 16),
-    fontWeight: Number(component.props.fontWeight ?? 400),
-    fontFamily: String(component.props.fontFamily ?? FONT_OPTIONS[0].value),
-  };
 }
 
 export function EditorShell({ project }: EditorShellProps) {
@@ -1148,282 +1113,6 @@ export function EditorShell({ project }: EditorShellProps) {
   );
 }
 
-function RouteSwitcher({
-  project,
-  activePageId,
-  onSelectPage,
-  onAddNavigationPage,
-  onUpdateNavigationItem,
-  onRemoveNavigationPage,
-  onReorderNavigationPage,
-  onSetHomePage,
-}: {
-  project: ResumeProject;
-  activePageId?: string;
-  onSelectPage: (id: string) => void;
-  onAddNavigationPage: () => void;
-  onUpdateNavigationItem: (
-    id: string,
-    patch: { label?: string; target?: string },
-  ) => void;
-  onRemoveNavigationPage: (id: string) => void;
-  onReorderNavigationPage: (activeId: string, overId: string) => void;
-  onSetHomePage: (id: string) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const switcherRef = useRef<HTMLDivElement | null>(null);
-  const routeSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
-  const activePage =
-    project.pages.find((page) => page.id === activePageId) ?? project.pages[0];
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    function handleOutsideClick(event: MouseEvent) {
-      if (
-        switcherRef.current &&
-        !switcherRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [isOpen]);
-
-  return (
-    <div ref={switcherRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen((value) => !value)}
-        className="inline-flex h-9 min-w-36 items-center justify-between gap-2 rounded-md border border-zinc-200 bg-white px-3 text-sm"
-      >
-        {activePage?.title ?? "Page"}
-        <ChevronDown className="size-4 text-zinc-400" />
-      </button>
-      {isOpen ? (
-        <div className="absolute right-0 top-11 z-50 w-80 rounded-lg border border-zinc-200 bg-white p-3 shadow-lg">
-          <DndContext
-            sensors={routeSensors}
-            collisionDetection={closestCenter}
-            onDragEnd={(event) => {
-              const activeId = String(event.active.id);
-              const overId = event.over?.id ? String(event.over.id) : "";
-              if (overId) {
-                onReorderNavigationPage(activeId, overId);
-              }
-            }}
-          >
-            <SortableContext
-              items={project.navigation.map((item) => item.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="grid gap-2">
-                {project.navigation.map((item, index) => {
-                  const linkedPage = project.pages.find(
-                    (page) => page.slug === item.target,
-                  );
-                  const isHome = index === 0;
-
-                  return (
-                    <SortableRouteItem key={item.id} itemId={item.id}>
-                      <div className="flex min-w-0 items-center gap-1">
-                        <input
-                          value={item.label}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onChange={(event) =>
-                            onUpdateNavigationItem(item.id, {
-                              label: event.target.value,
-                            })
-                          }
-                          className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs"
-                        />
-                        <button
-                          type="button"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={() =>
-                            linkedPage && onSelectPage(linkedPage.id)
-                          }
-                          className={cn(
-                            "h-8 rounded border border-zinc-200 px-2 text-xs",
-                            linkedPage?.id === activePageId &&
-                              "bg-zinc-950 text-white",
-                          )}
-                        >
-                          편집
-                        </button>
-                        <button
-                          type="button"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={() => onRemoveNavigationPage(item.id)}
-                          className="inline-flex size-8 items-center justify-center rounded border border-zinc-200 text-zinc-400 hover:text-red-600"
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <input
-                          value={item.target}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onChange={(event) =>
-                            onUpdateNavigationItem(item.id, {
-                              target: normalizeAnchor(event.target.value),
-                            })
-                          }
-                          className="h-8 min-w-0 flex-1 rounded border border-zinc-200 px-2 text-xs text-zinc-500"
-                        />
-                        <button
-                          type="button"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={() => onSetHomePage(item.id)}
-                          className={cn(
-                            "h-8 rounded border border-zinc-200 px-2 text-xs",
-                            isHome
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "text-zinc-500",
-                          )}
-                        >
-                          {isHome ? "대표" : "대표 지정"}
-                        </button>
-                      </div>
-                    </SortableRouteItem>
-                  );
-                })}
-              </div>
-            </SortableContext>
-          </DndContext>
-          <button
-            type="button"
-            onClick={onAddNavigationPage}
-            className="mt-3 flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-zinc-300 text-sm font-medium text-zinc-600 hover:bg-zinc-50"
-          >
-            <Plus className="size-4" />
-            라우트 추가
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function SortableRouteItem({
-  itemId,
-  children,
-}: {
-  itemId: string;
-  children: ReactNode;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: itemId,
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
-      {...attributes}
-      {...listeners}
-      className={cn(
-        "grid cursor-grab gap-2 rounded-md bg-zinc-50 p-2 active:cursor-grabbing",
-        isDragging && "relative z-10 shadow-lg ring-1 ring-emerald-300",
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-function SiteHeader({
-  project,
-  mode,
-  activeTarget,
-  onNavigate,
-  onTitleClick,
-}: {
-  project: ResumeProject;
-  mode: "edit" | "preview";
-  activeTarget?: string;
-  onNavigate: (target: string) => void;
-  onTitleClick: () => void;
-}) {
-  return (
-    <header className="flex min-h-16 items-center justify-between border-b border-zinc-100 px-8">
-      <button
-        type="button"
-        onClick={onTitleClick}
-        className="text-lg font-semibold text-zinc-950 hover:text-emerald-700"
-      >
-        {project.title}
-      </button>
-      {project.navigationMode === "scroll" ? (
-        <span className="text-xs font-medium text-zinc-400">Scroll Mode</span>
-      ) : (
-        <nav className="flex flex-wrap items-center justify-end gap-2">
-          {project.navigation.map((item) => (
-            <a
-              key={item.id}
-              href={
-                project.navigationMode === "scroll"
-                  ? `#${item.target}`
-                  : `/${project.slug}/${item.target}`
-              }
-              onClick={(event) => {
-                if (mode === "edit" || mode === "preview") {
-                  event.preventDefault();
-                  onNavigate(item.target);
-                }
-              }}
-              className={cn(
-                "rounded-md px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50",
-                activeTarget === item.target && "bg-zinc-100 text-zinc-950",
-              )}
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
-      )}
-    </header>
-  );
-}
-
-function getComponentLayer(component: ResumeComponent) {
-  if (component.type === "section") {
-    return 0;
-  }
-
-  if (component.type === "container") {
-    return 1;
-  }
-
-  if (component.type === "popup") {
-    return 6;
-  }
-
-  return 5;
-}
-
-function hasTypography(component: ResumeComponent) {
-  return ["text", "button", "link", "section", "container", "popup"].includes(
-    component.type,
-  );
-}
-
 function PageBreakGuides({ canvasHeight }: { canvasHeight: number }) {
   const totalPages = Math.max(1, Math.ceil(canvasHeight / PDF_PAGE_HEIGHT));
 
@@ -1702,7 +1391,7 @@ function CanvasComponent({
         </button>
       ) : component.type === "section" || component.type === "container" ? (
         <div
-          className="flex h-full w-full items-start border p-3 text-sm font-medium text-zinc-600"
+          className="flex h-full w-full items-start border p-3 text-sm font-medium text-zinc-600 rounded-md"
           id={
             component.type === "section"
               ? normalizeAnchor(component.content ?? component.id)
@@ -2410,318 +2099,4 @@ function PropertyPanel({
       </div>
     </aside>
   );
-}
-
-function NumberField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="grid gap-1">
-      <span className="text-zinc-500">{label}</span>
-      <input
-        type="number"
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="h-9 w-24 max-w-full rounded-md border border-zinc-200 px-2"
-      />
-    </label>
-  );
-}
-
-function ScrollToc({
-  navigation,
-  activeTarget,
-  onSelect,
-}: {
-  navigation: ResumeProject["navigation"];
-  activeTarget: string;
-  onSelect: (target: string) => void;
-}) {
-  return (
-    <aside className="fixed right-2 top-1/2 z-40 w-28 -translate-y-1/2 p-2 text-right sm:right-4 sm:w-36 lg:left-[calc(50%+300px)] lg:right-auto lg:w-44">
-      {/* <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 ">
-        Contents
-      </p> */}
-      <div className="grid gap-1">
-        {navigation.map((item) => {
-          const isActive = activeTarget === item.target;
-
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSelect(item.target)}
-              className={cn(
-                "rounded-md px-2 py-1.5 text-right transition hover:bg-zinc-100 hover:text-base hover:font-semibold hover:text-zinc-950 ",
-                isActive
-                  ? "text-base font-semibold text-zinc-950"
-                  : "text-xs font-medium text-zinc-400",
-              )}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
-    </aside>
-  );
-}
-
-function normalizeAnchor(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9가-힣-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function createPdfExportNode({
-  project,
-  activePage,
-  isScrollMode,
-  pageLayouts,
-  canvasHeight,
-}: {
-  project: ResumeProject;
-  activePage?: ResumeProject["pages"][number];
-  isScrollMode: boolean;
-  pageLayouts: Array<{
-    page: ResumeProject["pages"][number];
-    components: ResumeComponent[];
-    offset: number;
-    height: number;
-  }>;
-  canvasHeight: number;
-}) {
-  const wrapper = document.createElement("div");
-  wrapper.style.position = "fixed";
-  wrapper.style.left = "0";
-  wrapper.style.top = "0";
-  wrapper.style.background = "#ffffff";
-  wrapper.style.color = "#111827";
-  wrapper.style.width = `${PDF_PAGE_WIDTH}px`;
-  wrapper.style.height = `${canvasHeight}px`;
-  wrapper.style.minHeight = `${canvasHeight}px`;
-  wrapper.style.zIndex = "2147483647";
-  wrapper.style.pointerEvents = "none";
-  wrapper.style.fontFamily = "Arial, Helvetica, sans-serif";
-
-  const canvas = document.createElement("div");
-  canvas.style.position = "relative";
-  canvas.style.width = `${PDF_PAGE_WIDTH}px`;
-  canvas.style.height = `${canvasHeight}px`;
-  canvas.style.minHeight = `${canvasHeight}px`;
-  canvas.style.background = "#ffffff";
-  canvas.style.color = "#111827";
-
-  const header = document.createElement("div");
-  header.style.display = "flex";
-  header.style.alignItems = "center";
-  header.style.height = "64px";
-  header.style.padding = "0 32px";
-  header.style.borderBottom = "1px solid #f4f4f5";
-  header.style.boxSizing = "border-box";
-  header.style.fontSize = "14px";
-  header.style.fontWeight = "700";
-  header.textContent = project.title;
-  canvas.appendChild(header);
-
-  const layouts = isScrollMode
-    ? pageLayouts
-    : [
-        {
-          page: activePage ?? project.pages[0],
-          components: (activePage?.sections[0]?.components ?? []).filter(
-            (component) => !component.props.popupId,
-          ),
-          offset: 0,
-          height: canvasHeight,
-        },
-      ];
-
-  layouts.forEach((layout) => {
-    if (!layout.page) {
-      return;
-    }
-
-    if (isScrollMode) {
-      const label =
-        project.navigation.find((item) => item.target === layout.page.slug)
-          ?.label ?? layout.page.title;
-      const title = document.createElement("div");
-      title.style.position = "absolute";
-      title.style.left = "48px";
-      title.style.top = `${layout.offset + 76}px`;
-      title.style.fontSize = "11px";
-      title.style.fontWeight = "700";
-      title.style.letterSpacing = "1.4px";
-      title.style.color = "#a1a1aa";
-      title.textContent = label.toUpperCase();
-      canvas.appendChild(title);
-    }
-
-    layout.components
-      .filter((component) => !component.props.popupId)
-      .sort((a, b) => getComponentLayer(a) - getComponentLayer(b))
-      .forEach((component) => {
-        canvas.appendChild(
-          createPdfComponent(
-            component,
-            component.y + layout.offset + (isScrollMode ? 44 : 0),
-          ),
-        );
-      });
-  });
-
-  wrapper.appendChild(canvas);
-  document.body.appendChild(wrapper);
-
-  return wrapper;
-}
-
-async function waitForPdfNode(root: HTMLElement) {
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-
-  const images = Array.from(root.querySelectorAll("img"));
-  await Promise.all(
-    images.map(
-      (image) =>
-        new Promise<void>((resolve) => {
-          if (image.complete) {
-            resolve();
-            return;
-          }
-
-          image.onload = () => resolve();
-          image.onerror = () => resolve();
-        }),
-    ),
-  );
-}
-
-function createPdfComponent(component: ResumeComponent, top: number) {
-  const frame = document.createElement("div");
-  frame.style.position = "absolute";
-  frame.style.left = `${component.x}px`;
-  frame.style.top = `${top}px`;
-  frame.style.width = `${component.width}px`;
-  frame.style.height = `${component.height}px`;
-  frame.style.boxSizing = "border-box";
-  frame.style.overflow = "hidden";
-  frame.style.borderRadius = "6px";
-  frame.style.color = String(component.props.color ?? "#111827");
-  frame.style.fontSize = `${Number(component.props.fontSize ?? 16)}px`;
-  frame.style.fontWeight = String(component.props.fontWeight ?? 400);
-  frame.style.fontFamily = String(
-    component.props.fontFamily ?? FONT_OPTIONS[0].value,
-  );
-
-  if (component.type === "text") {
-    frame.style.padding = "8px";
-    frame.style.whiteSpace = "pre-wrap";
-    frame.textContent = component.content ?? "";
-    return frame;
-  }
-
-  if (component.type === "image" && component.content) {
-    const image = document.createElement("img");
-    image.src = component.content;
-    image.crossOrigin = "anonymous";
-    image.style.width = "100%";
-    image.style.height = "100%";
-    image.style.objectFit = String(component.props.objectFit ?? "cover");
-    image.style.objectPosition = `${Number(component.props.objectPositionX ?? 50)}% ${Number(component.props.objectPositionY ?? 50)}%`;
-    frame.appendChild(image);
-    return frame;
-  }
-
-  if (component.type === "divider") {
-    frame.style.borderTop = "1px solid #d4d4d8";
-    return frame;
-  }
-
-  if (component.type === "button") {
-    frame.style.display = "flex";
-    frame.style.alignItems = "center";
-    frame.style.justifyContent = "center";
-    frame.style.background = "#09090b";
-    frame.style.color = "#ffffff";
-    frame.textContent = component.content ?? "버튼";
-    return frame;
-  }
-
-  if (component.type === "popup") {
-    frame.style.border = "1px solid #e4e4e7";
-    frame.style.background = String(
-      component.props.backgroundColor ?? "#ffffff",
-    );
-
-    const thumbnailUrl = String(component.props.thumbnailUrl ?? "");
-    if (thumbnailUrl) {
-      const image = document.createElement("img");
-      image.src = thumbnailUrl;
-      image.crossOrigin = "anonymous";
-      image.style.width = "100%";
-      image.style.height = "60%";
-      image.style.objectFit = "cover";
-      frame.appendChild(image);
-    }
-
-    const title = document.createElement("div");
-    title.style.padding = "12px 12px 4px";
-    title.style.fontSize = `${Number(component.props.fontSize ?? 15)}px`;
-    title.style.fontWeight = String(component.props.fontWeight ?? 700);
-    title.textContent = component.content ?? "Popup title";
-    frame.appendChild(title);
-
-    const description = document.createElement("div");
-    description.style.padding = "0 12px 12px";
-    description.style.fontSize = "12px";
-    description.style.lineHeight = "1.5";
-    description.style.color = "#71717a";
-    description.textContent = String(component.props.description ?? "");
-    frame.appendChild(description);
-    return frame;
-  }
-
-  if (component.type === "link") {
-    frame.style.display = "flex";
-    frame.style.alignItems = "center";
-    frame.style.justifyContent = "center";
-    frame.style.border = "1px solid #d4d4d8";
-    frame.style.textDecoration = "underline";
-    frame.textContent = component.content ?? "링크";
-    return frame;
-  }
-
-  if (component.type === "section" || component.type === "container") {
-    frame.style.border = `1px ${String(component.props.borderStyle ?? "dashed")} ${String(component.props.borderColor ?? "#d4d4d8")}`;
-    frame.style.background = withAlpha(
-      String(component.props.backgroundColor ?? "#f8fafc"),
-      Number(component.props.backgroundOpacity ?? 100),
-    );
-    frame.style.padding = "12px";
-    frame.textContent = component.content ?? component.type;
-    return frame;
-  }
-
-  frame.style.display = "flex";
-  frame.style.alignItems = "center";
-  frame.style.justifyContent = "center";
-  frame.style.background = "#f4f4f5";
-  frame.style.color = "#71717a";
-  frame.textContent = component.type;
-  return frame;
 }
