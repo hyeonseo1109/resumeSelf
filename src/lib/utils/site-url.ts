@@ -16,13 +16,21 @@ export function getBrowserSiteOrigin() {
   return getConfiguredSiteUrl() ?? window.location.origin;
 }
 
+export function getCurrentBrowserOrigin() {
+  if (typeof window === "undefined") {
+    return getConfiguredSiteUrl() ?? "";
+  }
+
+  return window.location.origin;
+}
+
 export function getPublicProjectUrl(slug: string) {
   const origin = getBrowserSiteOrigin();
   return `${origin}/${slug.replace(/^\/+/, "")}`;
 }
 
 export function getAuthCallbackUrl(next = "/dashboard") {
-  const origin = getBrowserSiteOrigin();
+  const origin = getCurrentBrowserOrigin();
   const callbackUrl = new URL("/auth/callback", origin);
   callbackUrl.searchParams.set("next", next);
   return callbackUrl.toString();
