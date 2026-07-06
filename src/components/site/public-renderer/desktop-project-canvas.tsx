@@ -26,9 +26,17 @@ export function DesktopProjectCanvas({
       style={{
         width: PUBLIC_CANVAS_WIDTH,
         minHeight: canvasHeight,
+        backgroundColor: pageLayouts[0]?.page.canvasBackground ?? "#ffffff",
       }}
     >
-      <div className="relative" style={{ width: PUBLIC_CANVAS_WIDTH, minHeight: canvasHeight }}>
+      <div
+        className="relative"
+        style={{
+          width: PUBLIC_CANVAS_WIDTH,
+          minHeight: canvasHeight,
+          backgroundColor: pageLayouts[0]?.page.canvasBackground ?? "#ffffff",
+        }}
+      >
         {isScrollMode
           ? pageLayouts.map((layout) => {
               const navItem = project.navigation.find((item) => item.target === layout.page.slug);

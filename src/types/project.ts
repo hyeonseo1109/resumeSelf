@@ -9,6 +9,7 @@ export type ComponentType =
   | "image"
   | "video"
   | "button"
+  | "icon"
   | "link"
   | "divider"
   | "spacer"
@@ -57,6 +58,7 @@ export interface ResumeProject {
   ownerId: string;
   title: string;
   slug: string;
+  memo?: string;
   mode: ProjectMode;
   navigationMode: NavigationMode;
   navigation: NavigationItem[];

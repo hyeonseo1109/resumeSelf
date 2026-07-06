@@ -98,6 +98,10 @@ export function getMobileComponentHeight(component: ResumeComponent) {
     return 52;
   }
 
+  if (component.type === "icon") {
+    return 72;
+  }
+
   if (component.type === "text") {
     const contentLength = String(component.content ?? "").length;
     const estimatedLines = Math.max(3, Math.ceil(contentLength / 24));

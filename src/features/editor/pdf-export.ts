@@ -4,6 +4,7 @@ import {
   PDF_PAGE_WIDTH,
   getComponentLayer,
   getDividerStyle,
+  getImageMediaStyle,
   withAlpha,
 } from "./view-helpers";
 
@@ -29,7 +30,12 @@ export function createPdfExportNode({
   wrapper.style.position = "fixed";
   wrapper.style.left = "0";
   wrapper.style.top = "0";
-  wrapper.style.background = "#ffffff";
+  const pageBackground =
+    (isScrollMode ? project.pages[0]?.canvasBackground : activePage?.canvasBackground) ??
+    project.pages[0]?.canvasBackground ??
+    "#ffffff";
+
+  wrapper.style.background = pageBackground;
   wrapper.style.color = "#111827";
   wrapper.style.width = `${PDF_PAGE_WIDTH}px`;
   wrapper.style.height = `${canvasHeight}px`;
@@ -43,7 +49,7 @@ export function createPdfExportNode({
   canvas.style.width = `${PDF_PAGE_WIDTH}px`;
   canvas.style.height = `${canvasHeight}px`;
   canvas.style.minHeight = `${canvasHeight}px`;
-  canvas.style.background = "#ffffff";
+  canvas.style.background = pageBackground;
   canvas.style.color = "#111827";
 
   const header = document.createElement("div");
@@ -141,29 +147,40 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   frame.style.height = `${component.height}px`;
   frame.style.boxSizing = "border-box";
   frame.style.overflow = "hidden";
-  frame.style.borderRadius = "6px";
+  frame.style.borderRadius = `${Number(component.props.borderRadius ?? 6)}px`;
   frame.style.color = String(component.props.color ?? "#111827");
   frame.style.fontSize = `${Number(component.props.fontSize ?? 16)}px`;
   frame.style.fontWeight = String(component.props.fontWeight ?? 400);
   frame.style.fontFamily = String(
     component.props.fontFamily ?? FONT_OPTIONS[0].value,
   );
+  if (component.type !== "divider" && component.props.backgroundColor) {
+    frame.style.background = withAlpha(
+      String(component.props.backgroundColor),
+      Number(component.props.backgroundOpacity ?? 100),
+    );
+  }
 
   if (component.type === "text") {
     frame.style.padding = "8px";
     frame.style.whiteSpace = "pre-wrap";
+    frame.style.background = component.props.backgroundColor
+      ? withAlpha(
+          String(component.props.backgroundColor),
+          Number(component.props.backgroundOpacity ?? 100),
+        )
+      : "transparent";
     frame.textContent = component.content ?? "";
     return frame;
   }
 
   if (component.type === "image" && component.content) {
+    frame.style.position = "absolute";
     const image = document.createElement("img");
     image.src = component.content;
     image.crossOrigin = "anonymous";
-    image.style.width = "100%";
-    image.style.height = "100%";
-    image.style.objectFit = String(component.props.objectFit ?? "cover");
-    image.style.objectPosition = `${Number(component.props.objectPositionX ?? 50)}% ${Number(component.props.objectPositionY ?? 50)}%`;
+    image.style.position = "absolute";
+    Object.assign(image.style, getImageMediaStyle(component));
     frame.appendChild(image);
     return frame;
   }
@@ -182,7 +199,10 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     frame.style.display = "flex";
     frame.style.alignItems = "center";
     frame.style.justifyContent = "center";
-    frame.style.background = "#09090b";
+    frame.style.background = withAlpha(
+      String(component.props.backgroundColor ?? "#09090b"),
+      Number(component.props.backgroundOpacity ?? 100),
+    );
     frame.style.color = "#ffffff";
     frame.textContent = component.content ?? "버튼";
     return frame;
@@ -190,7 +210,10 @@ function createPdfComponent(component: ResumeComponent, top: number) {
 
   if (component.type === "popup") {
     frame.style.border = "1px solid #e4e4e7";
-    frame.style.background = String(component.props.backgroundColor ?? "#ffffff");
+    frame.style.background = withAlpha(
+      String(component.props.backgroundColor ?? "#ffffff"),
+      Number(component.props.backgroundOpacity ?? 100),
+    );
 
     const thumbnailUrl = String(component.props.thumbnailUrl ?? "");
     if (thumbnailUrl) {
@@ -225,8 +248,38 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     frame.style.alignItems = "center";
     frame.style.justifyContent = "center";
     frame.style.border = "1px solid #d4d4d8";
+    frame.style.background = withAlpha(
+      String(component.props.backgroundColor ?? "#ffffff"),
+      Number(component.props.backgroundOpacity ?? 100),
+    );
     frame.style.textDecoration = "underline";
     frame.textContent = component.content ?? "링크";
+    return frame;
+  }
+
+  if (component.type === "icon") {
+    frame.style.display = "flex";
+    frame.style.alignItems = "center";
+    frame.style.justifyContent = "center";
+    frame.style.background = withAlpha(
+      String(component.props.backgroundColor ?? "#ffffff"),
+      Number(component.props.backgroundOpacity ?? 0),
+    );
+
+    const icon = document.createElement("span");
+    icon.style.display = "block";
+    icon.style.width = "72%";
+    icon.style.height = "72%";
+    icon.style.backgroundColor = String(component.props.color ?? "#111827");
+    icon.style.maskImage = `url(${String(component.props.iconSrc ?? "/icons/icon_home.png")})`;
+    icon.style.maskPosition = "center";
+    icon.style.maskRepeat = "no-repeat";
+    icon.style.maskSize = "contain";
+    icon.style.setProperty("-webkit-mask-image", `url(${String(component.props.iconSrc ?? "/icons/icon_home.png")})`);
+    icon.style.setProperty("-webkit-mask-position", "center");
+    icon.style.setProperty("-webkit-mask-repeat", "no-repeat");
+    icon.style.setProperty("-webkit-mask-size", "contain");
+    frame.appendChild(icon);
     return frame;
   }
 

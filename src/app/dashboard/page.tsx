@@ -2,7 +2,13 @@ import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { ProjectList } from "@/components/dashboard/project-list";
 import { TopNav } from "@/components/layout/top-nav";
 import { getSubscriptionTier, projectLimits } from "@/config/plans";
-import { createProjectAction, deleteProjectAction, duplicateProjectAction, updateProjectSlugAction } from "@/app/dashboard/actions";
+import {
+  createProjectAction,
+  deleteProjectAction,
+  duplicateProjectAction,
+  updateProjectMemoAction,
+  updateProjectSlugAction,
+} from "@/app/dashboard/actions";
 import { getCurrentUser, listProjects } from "@/server/projects";
 
 const errorMessages: Record<string, string> = {
@@ -49,6 +55,7 @@ export default async function DashboardPage({
           createAction={createProjectAction}
           duplicateAction={duplicateProjectAction}
           deleteAction={deleteProjectAction}
+          updateMemoAction={updateProjectMemoAction}
           updateSlugAction={updateProjectSlugAction}
         />
       </main>

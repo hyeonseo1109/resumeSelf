@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Copy, ExternalLink, FilePenLine, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, FilePenLine, StickyNote, Trash2 } from "lucide-react";
 import { CreateProjectDialog } from "@/components/dashboard/create-project-dialog";
 import type { ResumeProject, SubscriptionTier } from "@/types/project";
 
@@ -11,6 +11,7 @@ interface ProjectListProps {
   createAction: (formData: FormData) => void | Promise<void>;
   duplicateAction: (formData: FormData) => void | Promise<void>;
   deleteAction: (formData: FormData) => void | Promise<void>;
+  updateMemoAction: (formData: FormData) => void | Promise<void>;
   updateSlugAction: (formData: FormData) => void | Promise<void>;
 }
 
@@ -22,6 +23,7 @@ export function ProjectList({
   createAction,
   duplicateAction,
   deleteAction,
+  updateMemoAction,
   updateSlugAction,
 }: ProjectListProps) {
   const canCreate = canEdit && projects.length < limit;
@@ -98,6 +100,25 @@ export function ProjectList({
                 >
                   <Copy className="size-4" />
                   복제
+                </button>
+              </form>
+              <form action={updateMemoAction} className="flex min-w-52 flex-1 items-center gap-1.5">
+                <input type="hidden" name="projectId" value={project.id} />
+                <input
+                  name="memo"
+                  defaultValue={project.memo ?? ""}
+                  disabled={!canEdit}
+                  placeholder="프로젝트 메모"
+                  maxLength={500}
+                  className="h-9 min-w-0 flex-1 rounded-md border border-zinc-200 px-2 text-sm text-zinc-600 disabled:bg-zinc-50 disabled:text-zinc-300"
+                />
+                <button
+                  type="submit"
+                  disabled={!canEdit}
+                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-300"
+                  title="메모 저장"
+                >
+                  <StickyNote className="size-4" />
                 </button>
               </form>
               <form action={deleteAction} className="ml-auto">

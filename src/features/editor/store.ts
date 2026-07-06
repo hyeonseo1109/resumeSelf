@@ -74,6 +74,8 @@ function getComponentSize(type: ComponentType) {
     width:
       type === "divider"
         ? 520
+        : type === "icon"
+          ? 72
         : type === "section" || type === "container"
           ? 620
           : type === "popup"
@@ -84,9 +86,11 @@ function getComponentSize(type: ComponentType) {
         ? 96
         : type === "section"
           ? 320
-          : type === "container"
-            ? 220
-            : type === "popup"
+        : type === "container"
+          ? 220
+          : type === "icon"
+            ? 72
+          : type === "popup"
               ? 220
               : 140,
   };
@@ -106,9 +110,11 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
         ? "새 텍스트를 입력하세요"
         : type === "button"
           ? "버튼"
-          : type === "link"
-            ? "링크"
-            : type === "section"
+            : type === "link"
+              ? "링크"
+              : type === "icon"
+                ? "아이콘"
+              : type === "section"
               ? "Section"
               : type === "container"
                 ? "Container"
@@ -125,8 +131,24 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
               thickness: "thin",
               borderColor: "#d4d4d8",
             }
+        : type === "icon"
+          ? {
+              iconSrc: "/icons/icon_home.png",
+              color: "#111827",
+              backgroundColor: "#ffffff",
+              backgroundOpacity: 0,
+              borderRadius: 12,
+            }
         : type === "image"
-          ? { objectFit: "cover", objectPositionX: 50, objectPositionY: 50 }
+          ? {
+              objectFit: "contain",
+              objectPositionX: 50,
+              objectPositionY: 50,
+              cropTop: 0,
+              cropRight: 0,
+              cropBottom: 0,
+              cropLeft: 0,
+            }
           : type === "section" || type === "container"
             ? { backgroundColor: "#f8fafc", borderColor: "#d4d4d8" }
             : type === "popup"

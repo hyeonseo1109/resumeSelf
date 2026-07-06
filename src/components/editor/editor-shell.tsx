@@ -12,6 +12,7 @@ import {
 import {
   Download,
   Eye,
+  ChevronDown,
   LayoutDashboard,
   Link2,
   Magnet,
@@ -29,7 +30,7 @@ import type {
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
-import { insertableComponents } from "@/config/editor";
+import { iconOptions, insertableComponents } from "@/config/editor";
 import { NumberField } from "@/components/editor/number-field";
 import { RouteSwitcher } from "@/components/editor/route-switcher";
 import { ScrollToc } from "@/components/editor/scroll-toc";
@@ -41,6 +42,7 @@ import {
 import { createEditorStore } from "@/features/editor/store";
 import {
   FONT_OPTIONS,
+  FONT_WEIGHT_OPTIONS,
   PDF_PAGE_HEIGHT,
   PDF_PAGE_WIDTH,
   type GuideLine,
@@ -48,9 +50,11 @@ import {
   clamp,
   getComponentLayer,
   getDividerStyle,
+  getImageMediaStyle,
   getTextStyle,
   hasTypography,
   normalizeAnchor,
+  normalizeFontWeight,
   withAlpha,
 } from "@/features/editor/view-helpers";
 import { cn } from "@/lib/utils/cn";
@@ -117,6 +121,8 @@ export function EditorShell({ project }: EditorShellProps) {
   const [guidePopupId, setGuidePopupId] = useState<string | null>(null);
   const [canvasScale, setCanvasScale] = useState(1);
   const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>([]);
+  const [cropEditingId, setCropEditingId] = useState<string | null>(null);
+  const [iconsOpen, setIconsOpen] = useState(false);
   const [lasso, setLasso] = useState<{
     startX: number;
     startY: number;
@@ -199,6 +205,11 @@ export function EditorShell({ project }: EditorShellProps) {
   const selectedComponent =
     components.find((component) => component.id === selectedComponentId) ??
     null;
+  const activeCropEditingId =
+    selectedComponent?.type === "image" && selectedComponent.id === cropEditingId
+      ? cropEditingId
+      : null;
+
   const canvasHeight = isScrollMode
     ? Math.max(
         1120,
@@ -533,6 +544,10 @@ export function EditorShell({ project }: EditorShellProps) {
     id: string,
     event?: ReactMouseEvent<HTMLDivElement>,
   ) {
+    if (cropEditingId && cropEditingId !== id) {
+      setCropEditingId(null);
+    }
+
     if (event?.shiftKey || event?.metaKey || event?.ctrlKey) {
       setSelectedComponentIds((ids) => {
         const nextIds = ids.includes(id)
@@ -1013,6 +1028,34 @@ export function EditorShell({ project }: EditorShellProps) {
     addComponentAt(type, { x, y });
   }
 
+  function addIconToVisibleCenter(icon: (typeof iconOptions)[number]) {
+    const canvas = document.getElementById("resume-canvas");
+    const canvasTop = canvas?.getBoundingClientRect().top ?? 0;
+    const visibleCenter = (window.innerHeight / 2 - canvasTop) / canvasScale;
+    const size = { width: 72, height: 72 };
+    const x = Math.max(24, Math.round(420 - size.width / 2));
+    const y = Math.max(88, Math.round(visibleCenter - size.height / 2));
+
+    addComponents([
+      {
+        id: crypto.randomUUID(),
+        type: "icon",
+        x,
+        y,
+        width: size.width,
+        height: size.height,
+        content: icon.label,
+        props: {
+          iconSrc: icon.src,
+          color: "#111827",
+          backgroundColor: "#ffffff",
+          backgroundOpacity: 0,
+          borderRadius: 12,
+        },
+      },
+    ]);
+  }
+
   function handleHeaderNavigation(target: string) {
     if (editorProject.navigationMode === "scroll") {
       const nextPage = editorProject.pages.find((page) => page.slug === target);
@@ -1267,6 +1310,46 @@ export function EditorShell({ project }: EditorShellProps) {
                   </span>
                 </button>
               ))}
+              <div className="rounded-md border border-zinc-200">
+                <button
+                  type="button"
+                  onClick={() => setIconsOpen((isOpen) => !isOpen)}
+                  className="flex w-full items-center justify-between gap-2 p-3 text-left transition hover:bg-zinc-50"
+                >
+                  <span>
+                    <span className="block text-sm font-medium">Icon</span>
+                    <span className="mt-1 block text-xs leading-5 text-zinc-500">
+                      연락처, 홈, 사람 아이콘
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "size-4 shrink-0 text-zinc-400 transition",
+                      iconsOpen && "rotate-180",
+                    )}
+                  />
+                </button>
+                {iconsOpen ? (
+                  <div className="grid grid-cols-2 gap-2 border-t border-zinc-100 p-2">
+                    {iconOptions.map((icon) => (
+                      <button
+                        key={icon.id}
+                        type="button"
+                        onClick={() => addIconToVisibleCenter(icon)}
+                        className="grid place-items-center gap-1 rounded-md border border-zinc-100 p-2 text-xs text-zinc-500 hover:border-emerald-200 hover:bg-emerald-50"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={icon.src}
+                          alt=""
+                          className="size-8 object-contain"
+                        />
+                        <span>{icon.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </aside>
         ) : null}
@@ -1351,6 +1434,7 @@ export function EditorShell({ project }: EditorShellProps) {
                     displayTop={displayTop}
                     preview={mode === "preview"}
                     isSelected={selectedComponentIds.includes(component.id)}
+                    isCropEditing={activeCropEditingId === component.id}
                     onSelect={(event) => handleComponentSelect(component.id, event)}
                     onDelete={() => {
                       recordHistory();
@@ -1366,6 +1450,7 @@ export function EditorShell({ project }: EditorShellProps) {
                     }
                     onOpenPopup={() => setOpenPopup(component.id)}
                     interactionScale={canvasScale}
+                    onUpdate={(patch) => updateComponent(component.id, patch)}
                   />
                 ))}
                 {!guidePopupId ? (
@@ -1386,6 +1471,7 @@ export function EditorShell({ project }: EditorShellProps) {
                   onInlineTextChange={(id, content) =>
                     updateComponent(id, { content })
                   }
+                  onUpdateComponent={updateComponent}
                   guideLines={guidePopupId === popupComponent.id ? guideLines : []}
                   spacingGuides={guidePopupId === popupComponent.id ? spacingGuides : []}
                 />
@@ -1404,6 +1490,10 @@ export function EditorShell({ project }: EditorShellProps) {
             onSetNavigationMode={setNavigationMode}
             canvasBackground={canvasBackground}
             onUpdateCanvasBackground={updateCanvasBackground}
+            isImageCropEditing={activeCropEditingId === selectedComponent?.id}
+            onToggleImageCrop={(id) =>
+              setCropEditingId((currentId) => (currentId === id ? null : id))
+            }
             onDelete={(id) => {
               recordHistory();
               removeComponents(getPopupRelatedIds([id]));
@@ -1563,6 +1653,7 @@ function CanvasComponent({
   displayTop,
   preview,
   isSelected,
+  isCropEditing,
   onSelect,
   onDelete,
   onResize,
@@ -1570,11 +1661,13 @@ function CanvasComponent({
   onInlineTextChange,
   onOpenPopup,
   interactionScale,
+  onUpdate,
 }: {
   component: ResumeComponent;
   displayTop: number;
   preview: boolean;
   isSelected: boolean;
+  isCropEditing: boolean;
   onSelect: (event?: ReactMouseEvent<HTMLDivElement>) => void;
   onDelete: () => void;
   onResize: (deltaWidth: number, deltaHeight: number) => void;
@@ -1582,12 +1675,15 @@ function CanvasComponent({
   onInlineTextChange: (content: string) => void;
   onOpenPopup: () => void;
   interactionScale: number;
+  onUpdate: (patch: Partial<ResumeComponent>) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: component.id,
     disabled: preview,
   });
   const [textDraft, setTextDraft] = useState(component.content ?? "");
+  const textStyle = getTextStyle(component);
+  const borderRadius = Number(component.props.borderRadius ?? 6);
 
   const style: CSSProperties = {
     width: component.width,
@@ -1600,7 +1696,12 @@ function CanvasComponent({
     zIndex: getComponentLayer(component),
     backgroundColor:
       component.type === "image" || component.type === "video"
-        ? String(component.props.backgroundColor ?? "transparent")
+        ? component.props.backgroundColor
+          ? withAlpha(
+              String(component.props.backgroundColor),
+              Number(component.props.backgroundOpacity ?? 100),
+            )
+          : "transparent"
         : undefined,
     borderColor:
       component.type === "image" || component.type === "video"
@@ -1614,9 +1715,8 @@ function CanvasComponent({
         : undefined,
     borderWidth:
       component.type === "image" || component.type === "video" ? 1 : undefined,
+    borderRadius,
   };
-  const textStyle = getTextStyle(component);
-
   function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
     event.stopPropagation();
@@ -1627,6 +1727,103 @@ function CanvasComponent({
 
     function handlePointerMove(pointerEvent: PointerEvent) {
       onResize(pointerEvent.clientX - startX, pointerEvent.clientY - startY);
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  function handleCropStart(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    corner: "topLeft" | "topRight" | "bottomLeft" | "bottomRight",
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const initialComponent = { ...component };
+    const initialMedia = {
+      width: Number(component.props.mediaWidth ?? component.width),
+      height: Number(component.props.mediaHeight ?? component.height),
+      offsetX: Number(component.props.mediaOffsetX ?? 0),
+      offsetY: Number(component.props.mediaOffsetY ?? 0),
+    };
+    const minSize = 32;
+
+    function handlePointerMove(pointerEvent: PointerEvent) {
+      const deltaX = (pointerEvent.clientX - startX) / interactionScale;
+      const deltaY = (pointerEvent.clientY - startY) / interactionScale;
+      const next = {
+        x: initialComponent.x,
+        y: initialComponent.y,
+        width: initialComponent.width,
+        height: initialComponent.height,
+        mediaOffsetX: initialMedia.offsetX,
+        mediaOffsetY: initialMedia.offsetY,
+      };
+
+      if (corner.includes("top")) {
+        const limitedDelta = clamp(
+          deltaY,
+          Math.max(-initialComponent.y, initialMedia.offsetY),
+          initialComponent.height - minSize,
+        );
+        next.y = Math.round(initialComponent.y + limitedDelta);
+        next.height = Math.round(initialComponent.height - limitedDelta);
+        next.mediaOffsetY = Math.round(initialMedia.offsetY - limitedDelta);
+      }
+      if (corner.includes("bottom")) {
+        next.height = Math.round(
+          clamp(
+            initialComponent.height + deltaY,
+            minSize,
+            initialMedia.height + initialMedia.offsetY,
+          ),
+        );
+      }
+      if (corner.includes("Left")) {
+        const limitedDelta = clamp(
+          deltaX,
+          Math.max(-initialComponent.x, initialMedia.offsetX),
+          initialComponent.width - minSize,
+        );
+        next.x = Math.round(initialComponent.x + limitedDelta);
+        next.width = Math.round(initialComponent.width - limitedDelta);
+        next.mediaOffsetX = Math.round(initialMedia.offsetX - limitedDelta);
+      }
+      if (corner.includes("Right")) {
+        next.width = Math.round(
+          clamp(
+            initialComponent.width + deltaX,
+            minSize,
+            initialMedia.width + initialMedia.offsetX,
+          ),
+        );
+      }
+
+      onUpdate({
+        x: next.x,
+        y: next.y,
+        width: next.width,
+        height: next.height,
+        props: {
+          ...component.props,
+          cropTop: 0,
+          cropRight: 0,
+          cropBottom: 0,
+          cropLeft: 0,
+          mediaWidth: initialMedia.width,
+          mediaHeight: initialMedia.height,
+          mediaOffsetX: next.mediaOffsetX,
+          mediaOffsetY: next.mediaOffsetY,
+        },
+      });
     }
 
     function handlePointerUp() {
@@ -1674,11 +1871,17 @@ function CanvasComponent({
       ) : null}
       {component.type === "text" ? (
         <div
-          className="h-full w-full rounded-md p-3"
+          className="h-full w-full p-3"
           style={{
             backgroundColor: String(
-              component.props.backgroundColor ?? "transparent",
+              component.props.backgroundColor
+                ? withAlpha(
+                    String(component.props.backgroundColor),
+                    Number(component.props.backgroundOpacity ?? 100),
+                  )
+                : "transparent",
             ),
+            borderRadius,
           }}
         >
           <textarea
@@ -1705,26 +1908,71 @@ function CanvasComponent({
           <span style={getDividerStyle(component)} />
         </div>
       ) : component.type === "image" && component.content ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={component.content}
-          alt=""
-          className="h-full w-full rounded-md"
-          style={{
-            objectFit: String(
-              component.props.objectFit ?? "cover",
-            ) as CSSProperties["objectFit"],
-            objectPosition: `${Number(component.props.objectPositionX ?? 50)}% ${Number(component.props.objectPositionY ?? 50)}%`,
-          }}
-        />
+        <div
+          className="relative h-full w-full overflow-hidden"
+          style={{ borderRadius }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={component.content}
+            alt=""
+            className="absolute"
+            style={{
+              ...getImageMediaStyle(component),
+            }}
+          />
+          {!preview && isCropEditing ? (
+            <>
+              {(["topLeft", "topRight", "bottomLeft", "bottomRight"] as const).map((corner) => (
+                <button
+                  key={corner}
+                  type="button"
+                  data-editor-control="true"
+                  onPointerDown={(event) => handleCropStart(event, corner)}
+                  className={cn(
+                    "absolute z-20 size-5 bg-transparent",
+                    corner === "topLeft" &&
+                      "cursor-nwse-resize border-l-2 border-t-2 border-emerald-600",
+                    corner === "topRight" &&
+                      "cursor-nesw-resize border-r-2 border-t-2 border-emerald-600",
+                    corner === "bottomLeft" &&
+                      "cursor-nesw-resize border-b-2 border-l-2 border-emerald-600",
+                    corner === "bottomRight" &&
+                      "cursor-nwse-resize border-b-2 border-r-2 border-emerald-600",
+                  )}
+                  style={{
+                    left:
+                      corner === "topLeft" || corner === "bottomLeft"
+                        ? 0
+                        : undefined,
+                    right:
+                      corner === "topRight" || corner === "bottomRight"
+                        ? 0
+                        : undefined,
+                    top:
+                      corner === "topLeft" || corner === "topRight"
+                        ? 0
+                        : undefined,
+                    bottom:
+                      corner === "bottomLeft" || corner === "bottomRight"
+                        ? 0
+                        : undefined,
+                  }}
+                  aria-label="Crop image"
+                />
+              ))}
+            </>
+          ) : null}
+        </div>
       ) : component.type === "video" && component.content ? (
         <video
           src={component.content}
-          className="h-full w-full rounded-md"
+          className="h-full w-full"
           controls={preview}
           style={{
+            borderRadius,
             objectFit: String(
-              component.props.objectFit ?? "cover",
+              component.props.objectFit ?? "contain",
             ) as CSSProperties["objectFit"],
             objectPosition: `${Number(component.props.objectPositionX ?? 50)}% ${Number(component.props.objectPositionY ?? 50)}%`,
           }}
@@ -1732,11 +1980,15 @@ function CanvasComponent({
       ) : component.type === "button" ? (
         <button
           type="button"
-          className="h-full w-full rounded-md bg-zinc-950 px-4 text-sm font-medium text-white"
+          className="h-full w-full bg-zinc-950 px-4 text-sm font-medium text-white"
           style={{
             ...textStyle,
+            borderRadius,
             backgroundColor: String(
-              component.props.backgroundColor ?? "#09090b",
+              withAlpha(
+                String(component.props.backgroundColor ?? "#09090b"),
+                Number(component.props.backgroundOpacity ?? 100),
+              ),
             ),
             color: String(component.props.color ?? "#ffffff"),
           }}
@@ -1745,11 +1997,15 @@ function CanvasComponent({
         </button>
       ) : component.type === "link" && !preview ? (
         <div
-          className="flex h-full w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4"
+          className="flex h-full w-full items-center justify-center border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4"
           style={{
             ...textStyle,
+            borderRadius,
             backgroundColor: String(
-              component.props.backgroundColor ?? "#ffffff",
+              withAlpha(
+                String(component.props.backgroundColor ?? "#ffffff"),
+                Number(component.props.backgroundOpacity ?? 100),
+              ),
             ),
             color: String(component.props.color ?? "#18181b"),
           }}
@@ -1761,11 +2017,15 @@ function CanvasComponent({
           href={String(component.props.href ?? "#")}
           target="_blank"
           rel="noreferrer"
-          className="flex h-full w-full items-center justify-center rounded-md border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
+          className="flex h-full w-full items-center justify-center border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
           style={{
             ...textStyle,
+            borderRadius,
             backgroundColor: String(
-              component.props.backgroundColor ?? "#ffffff",
+              withAlpha(
+                String(component.props.backgroundColor ?? "#ffffff"),
+                Number(component.props.backgroundOpacity ?? 100),
+              ),
             ),
             color: String(component.props.color ?? "#18181b"),
           }}
@@ -1779,10 +2039,14 @@ function CanvasComponent({
             event.stopPropagation();
             onOpenPopup();
           }}
-          className="flex h-full w-full flex-col overflow-hidden rounded-md border border-zinc-200 bg-white text-left shadow-sm"
+          className="flex h-full w-full flex-col overflow-hidden border border-zinc-200 bg-white text-left shadow-sm"
           style={{
+            borderRadius,
             backgroundColor: String(
-              component.props.backgroundColor ?? "#ffffff",
+              withAlpha(
+                String(component.props.backgroundColor ?? "#ffffff"),
+                Number(component.props.backgroundOpacity ?? 100),
+              ),
             ),
             borderColor: String(component.props.borderColor ?? "#e4e4e7"),
             borderStyle: String(
@@ -1813,9 +2077,35 @@ function CanvasComponent({
             )}
           </span>
         </button>
+      ) : component.type === "icon" ? (
+        <div
+          className="flex h-full w-full items-center justify-center overflow-hidden"
+          style={{
+            borderRadius,
+            backgroundColor: withAlpha(
+              String(component.props.backgroundColor ?? "#ffffff"),
+              Number(component.props.backgroundOpacity ?? 0),
+            ),
+          }}
+        >
+          <span
+            className="block h-[72%] w-[72%]"
+            style={{
+              backgroundColor: String(component.props.color ?? "#111827"),
+              maskImage: `url(${String(component.props.iconSrc ?? "/icons/icon_home.png")})`,
+              maskPosition: "center",
+              maskRepeat: "no-repeat",
+              maskSize: "contain",
+              WebkitMaskImage: `url(${String(component.props.iconSrc ?? "/icons/icon_home.png")})`,
+              WebkitMaskPosition: "center",
+              WebkitMaskRepeat: "no-repeat",
+              WebkitMaskSize: "contain",
+            }}
+          />
+        </div>
       ) : component.type === "section" || component.type === "container" ? (
         <div
-          className="flex h-full w-full items-start border p-3 text-sm font-medium text-zinc-600 rounded-md"
+          className="flex h-full w-full items-start border p-3 text-sm font-medium text-zinc-600"
           id={
             component.type === "section"
               ? normalizeAnchor(component.content ?? component.id)
@@ -1828,7 +2118,7 @@ function CanvasComponent({
               Number(component.props.backgroundOpacity ?? 100),
             ),
             borderColor: String(component.props.borderColor ?? "#d4d4d8"),
-            borderRadius: Number(component.props.borderRadius ?? 0),
+            borderRadius,
             borderStyle: String(
               component.props.borderStyle ?? "dashed",
             ) as CSSProperties["borderStyle"],
@@ -1837,7 +2127,10 @@ function CanvasComponent({
           {component.content}
         </div>
       ) : (
-        <div className="flex h-full w-full items-center justify-center rounded-md bg-zinc-100 text-sm font-medium text-zinc-500">
+        <div
+          className="flex h-full w-full items-center justify-center bg-zinc-100 text-sm font-medium text-zinc-500"
+          style={{ borderRadius }}
+        >
           {component.type}
         </div>
       )}
@@ -1864,6 +2157,7 @@ function PopupOverlay({
   onDelete,
   onResize,
   onInlineTextChange,
+  onUpdateComponent,
   guideLines,
   spacingGuides,
 }: {
@@ -1880,6 +2174,7 @@ function PopupOverlay({
     deltaHeight: number,
   ) => void;
   onInlineTextChange: (id: string, content: string) => void;
+  onUpdateComponent: (id: string, patch: Partial<ResumeComponent>) => void;
   guideLines: GuideLine[];
   spacingGuides: SpacingGuide[];
 }) {
@@ -1934,10 +2229,11 @@ function PopupOverlay({
           {childrenComponents.map((component) => (
             <CanvasComponent
               key={component.id}
-                component={component}
-                displayTop={component.y}
-                preview={preview}
-                isSelected={selectedComponentId === component.id}
+              component={component}
+              displayTop={component.y}
+              preview={preview}
+              isSelected={selectedComponentId === component.id}
+              isCropEditing={false}
               onSelect={(event) => {
                 event?.stopPropagation();
                 onSelect(component.id);
@@ -1952,6 +2248,7 @@ function PopupOverlay({
               }
               onOpenPopup={() => undefined}
               interactionScale={1}
+              onUpdate={(patch) => onUpdateComponent(component.id, patch)}
             />
           ))}
           <GuideOverlay guideLines={guideLines} spacingGuides={spacingGuides} />
@@ -1971,6 +2268,8 @@ function PropertyPanel({
   onSetNavigationMode,
   canvasBackground,
   onUpdateCanvasBackground,
+  isImageCropEditing,
+  onToggleImageCrop,
 }: {
   components: ResumeComponent[];
   selectedComponent: ResumeComponent | null;
@@ -1985,6 +2284,8 @@ function PropertyPanel({
   onSetNavigationMode: (mode: ResumeProject["navigationMode"]) => void;
   canvasBackground: string;
   onUpdateCanvasBackground: (color: string) => void;
+  isImageCropEditing: boolean;
+  onToggleImageCrop: (id: string) => void;
 }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -2156,6 +2457,39 @@ function PropertyPanel({
               </div>
             ) : null}
 
+            {selectedComponent.type === "icon" ? (
+              <div className="grid gap-2 rounded-md border border-zinc-200 p-3">
+                <p className="text-sm font-medium text-zinc-700">Icon</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {iconOptions.map((icon) => (
+                    <button
+                      key={icon.id}
+                      type="button"
+                      onClick={() =>
+                        onUpdate(selectedComponent.id, {
+                          content: icon.label,
+                          props: {
+                            ...selectedComponent.props,
+                            iconSrc: icon.src,
+                          },
+                        })
+                      }
+                      className={cn(
+                        "grid place-items-center gap-1 rounded-md border p-2 text-xs text-zinc-500",
+                        selectedComponent.props.iconSrc === icon.src
+                          ? "border-emerald-500 bg-emerald-50"
+                          : "border-zinc-100 hover:border-zinc-300",
+                      )}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={icon.src} alt="" className="size-7 object-contain" />
+                      <span>{icon.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
             {selectedComponent.type === "image" ||
             selectedComponent.type === "video" ? (
               <div className="grid min-w-0 gap-3">
@@ -2196,7 +2530,7 @@ function PropertyPanel({
                 <label className="grid min-w-0 gap-1">
                   <span className="text-zinc-500">Fit</span>
                   <select
-                    value={String(selectedComponent.props.objectFit ?? "cover")}
+                    value={String(selectedComponent.props.objectFit ?? "contain")}
                     onChange={(event) =>
                       onUpdate(selectedComponent.id, {
                         props: {
@@ -2207,35 +2541,24 @@ function PropertyPanel({
                     }
                     className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
                   >
-                    <option value="cover">Crop</option>
                     <option value="contain">Fit</option>
                     <option value="fill">Stretch</option>
                   </select>
                 </label>
-                <NumberField
-                  label="Crop X (%)"
-                  value={Number(selectedComponent.props.objectPositionX ?? 50)}
-                  onChange={(value) =>
-                    onUpdate(selectedComponent.id, {
-                      props: {
-                        ...selectedComponent.props,
-                        objectPositionX: clamp(value, 0, 100),
-                      },
-                    })
-                  }
-                />
-                <NumberField
-                  label="Crop Y (%)"
-                  value={Number(selectedComponent.props.objectPositionY ?? 50)}
-                  onChange={(value) =>
-                    onUpdate(selectedComponent.id, {
-                      props: {
-                        ...selectedComponent.props,
-                        objectPositionY: clamp(value, 0, 100),
-                      },
-                    })
-                  }
-                />
+                {selectedComponent.type === "image" ? (
+                  <button
+                    type="button"
+                    onClick={() => onToggleImageCrop(selectedComponent.id)}
+                    className={cn(
+                      "h-9 rounded-md border px-3 text-sm font-medium transition",
+                      isImageCropEditing
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                        : "border-zinc-200 text-zinc-700 hover:bg-zinc-50",
+                    )}
+                  >
+                    {isImageCropEditing ? "이미지 자르기 종료" : "이미지 자르기"}
+                  </button>
+                ) : null}
               </div>
             ) : null}
 
@@ -2315,9 +2638,11 @@ function PropertyPanel({
                   Typography
                 </summary>
                 <div className="mt-3 grid gap-3">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={cn("grid gap-2", selectedComponent.type !== "icon" && "grid-cols-2")}>
                     <label className="grid gap-1">
-                      <span className="text-zinc-500">Text Color</span>
+                      <span className="text-zinc-500">
+                        {selectedComponent.type === "icon" ? "Icon Color" : "Text Color"}
+                      </span>
                       <input
                         type="color"
                         value={String(
@@ -2334,62 +2659,74 @@ function PropertyPanel({
                         className="h-9 w-full rounded-md border border-zinc-200"
                       />
                     </label>
-                    <NumberField
-                      label="Font Size"
-                      value={Number(selectedComponent.props.fontSize ?? 16)}
-                      onChange={(value) =>
-                        onUpdate(selectedComponent.id, {
-                          props: {
-                            ...selectedComponent.props,
-                            fontSize: value,
-                          },
-                        })
-                      }
-                    />
+                    {selectedComponent.type !== "icon" ? (
+                      <NumberField
+                        label="Font Size"
+                        value={Number(selectedComponent.props.fontSize ?? 16)}
+                        onChange={(value) =>
+                          onUpdate(selectedComponent.id, {
+                            props: {
+                              ...selectedComponent.props,
+                              fontSize: value,
+                            },
+                          })
+                        }
+                      />
+                    ) : null}
                   </div>
-                  <label className="grid gap-1">
-                    <span className="text-zinc-500">Font Family</span>
-                    <select
-                      value={String(
-                        selectedComponent.props.fontFamily ??
-                          FONT_OPTIONS[0].value,
-                      )}
-                      onChange={(event) =>
-                        onUpdate(selectedComponent.id, {
-                          props: {
-                            ...selectedComponent.props,
-                            fontFamily: event.target.value,
-                          },
-                        })
-                      }
-                      className="h-9 rounded-md border border-zinc-200 px-2"
-                    >
-                      {FONT_OPTIONS.map((font) => (
-                        <option key={font.value} value={font.value}>
-                          {font.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 rounded-md bg-zinc-50 px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={
-                        Number(selectedComponent.props.fontWeight ?? 400) >= 700
-                      }
-                      onChange={(event) =>
-                        onUpdate(selectedComponent.id, {
-                          props: {
-                            ...selectedComponent.props,
-                            fontWeight: event.target.checked ? 700 : 400,
-                          },
-                        })
-                      }
-                    />
-                    <span className="text-sm font-medium text-zinc-700">
-                      Bold
-                    </span>
-                  </label>
+                  {selectedComponent.type !== "icon" ? (
+                    <>
+                      <label className="grid gap-1">
+                        <span className="text-zinc-500">Font Family</span>
+                        <select
+                          value={String(
+                            selectedComponent.props.fontFamily ??
+                              FONT_OPTIONS[0].value,
+                          )}
+                          onChange={(event) =>
+                            onUpdate(selectedComponent.id, {
+                              props: {
+                                ...selectedComponent.props,
+                                fontFamily: event.target.value,
+                              },
+                            })
+                          }
+                          className="h-9 rounded-md border border-zinc-200 px-2"
+                        >
+                          {FONT_OPTIONS.map((font) => (
+                            <option key={font.value} value={font.value}>
+                              {font.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="grid gap-1">
+                        <span className="text-zinc-500">Font Weight</span>
+                        <select
+                          value={String(
+                            normalizeFontWeight(
+                              selectedComponent.props.fontWeight,
+                            ),
+                          )}
+                          onChange={(event) =>
+                            onUpdate(selectedComponent.id, {
+                              props: {
+                                ...selectedComponent.props,
+                                fontWeight: Number(event.target.value),
+                              },
+                            })
+                          }
+                          className="h-9 rounded-md border border-zinc-200 px-2"
+                        >
+                          {FONT_WEIGHT_OPTIONS.map((weight) => (
+                            <option key={weight.value} value={weight.value}>
+                              {weight.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </>
+                  ) : null}
                 </div>
               </details>
             ) : null}
@@ -2483,69 +2820,49 @@ function PropertyPanel({
                 </div>
               </details>
             ) : null}
-            {selectedComponent.type === "text" ? (
-              <label className="flex items-center gap-2 rounded-md bg-zinc-50 px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={!selectedComponent.props.backgroundColor}
-                  onChange={(event) =>
-                    onUpdate(selectedComponent.id, {
-                      props: {
-                        ...selectedComponent.props,
-                        backgroundColor: event.target.checked
-                          ? null
-                          : "#ffffff",
-                      },
-                    })
-                  }
-                />
-                <span className="text-sm font-medium text-zinc-700">
-                  Transparent background
-                </span>
-              </label>
+            {selectedComponent.type !== "divider" ? (
+              <NumberField
+                label="Background Opacity (%)"
+                value={Number(selectedComponent.props.backgroundOpacity ?? 100)}
+                onChange={(value) =>
+                  onUpdate(selectedComponent.id, {
+                    props: {
+                      ...selectedComponent.props,
+                      backgroundColor:
+                        selectedComponent.props.backgroundColor ??
+                        "#ffffff",
+                      backgroundOpacity: clamp(value, 0, 100),
+                    },
+                  })
+                }
+              />
             ) : null}
             {selectedComponent.type === "section" ||
             selectedComponent.type === "container" ||
+            selectedComponent.type === "text" ||
             selectedComponent.type === "image" ||
             selectedComponent.type === "video" ||
+            selectedComponent.type === "icon" ||
+            selectedComponent.type === "link" ||
+            selectedComponent.type === "button" ||
             selectedComponent.type === "popup" ? (
               <details className="rounded-md border border-zinc-200 p-3" open>
                 <summary className="cursor-pointer text-sm font-medium text-zinc-700">
                   Box Style
                 </summary>
                 <div className="mt-3 grid gap-3">
-                  {selectedComponent.type === "section" ||
-                  selectedComponent.type === "container" ? (
-                    <NumberField
-                      label="Background Opacity (%)"
-                      value={Number(
-                        selectedComponent.props.backgroundOpacity ?? 100,
-                      )}
-                      onChange={(value) =>
-                        onUpdate(selectedComponent.id, {
-                          props: {
-                            ...selectedComponent.props,
-                            backgroundOpacity: clamp(value, 0, 100),
-                          },
-                        })
-                      }
-                    />
-                  ) : null}
-                  {selectedComponent.type === "section" ||
-                  selectedComponent.type === "container" ? (
-                    <NumberField
-                      label="Border Radius (px)"
-                      value={Number(selectedComponent.props.borderRadius ?? 0)}
-                      onChange={(value) =>
-                        onUpdate(selectedComponent.id, {
-                          props: {
-                            ...selectedComponent.props,
-                            borderRadius: clamp(value, 0, 64),
-                          },
-                        })
-                      }
-                    />
-                  ) : null}
+                  <NumberField
+                    label="Border Radius (px)"
+                    value={Number(selectedComponent.props.borderRadius ?? 6)}
+                    onChange={(value) =>
+                      onUpdate(selectedComponent.id, {
+                        props: {
+                          ...selectedComponent.props,
+                          borderRadius: clamp(value, 0, 96),
+                        },
+                      })
+                    }
+                  />
                   <label className="grid min-w-0 gap-1">
                     <span className="text-zinc-500">Border Color</span>
                     <input

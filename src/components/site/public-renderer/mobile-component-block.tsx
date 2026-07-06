@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
+import { withAlpha } from "@/features/editor/view-helpers";
 import { getMobileComponentHeight } from "./layout";
 import { PublicComponent } from "./public-component";
 import type { MobileComponentNode } from "./types";
@@ -19,7 +20,7 @@ export function MobileComponentBlock({
       <div
         className="grid w-full gap-3 border p-3"
         style={{
-          backgroundColor: String(component.props.backgroundColor ?? "#f8fafc"),
+          backgroundColor: withAlpha(String(component.props.backgroundColor ?? "#f8fafc"), Number(component.props.backgroundOpacity ?? 100)),
           borderColor: String(component.props.borderColor ?? "#d4d4d8"),
           borderStyle: String(component.props.borderStyle ?? "dashed") as CSSProperties["borderStyle"],
           borderRadius: `${Number(component.props.borderRadius ?? 0)}px`,

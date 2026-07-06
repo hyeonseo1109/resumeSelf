@@ -166,6 +166,7 @@ export async function createProjectAction(formData: FormData) {
       mode,
       navigation_mode: "router",
       navigation,
+      memo: "",
       pages: buildInitialPages(mode, navigation),
       published_at: new Date().toISOString(),
     })
@@ -207,7 +208,7 @@ export async function duplicateProjectAction(formData: FormData) {
 
   const { data: source, error: sourceError } = await supabase
     .from("projects")
-    .select("title, slug, mode, navigation_mode, navigation, pages")
+    .select("title, slug, memo, mode, navigation_mode, navigation, pages")
     .eq("id", projectId)
     .eq("owner_id", user.id)
     .maybeSingle();
@@ -229,6 +230,7 @@ export async function duplicateProjectAction(formData: FormData) {
       owner_id: user.id,
       title: `${source.title} Copy`,
       slug,
+      memo: source.memo ?? "",
       mode: source.mode,
       navigation_mode: source.navigation_mode,
       navigation,
@@ -297,6 +299,39 @@ export async function updateProjectSlugAction(formData: FormData) {
   const { error } = await supabase
     .from("projects")
     .update({ slug: nextSlug })
+    .eq("id", projectId)
+    .eq("owner_id", user.id);
+
+  if (error) {
+    redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/dashboard");
+}
+
+export async function updateProjectMemoAction(formData: FormData) {
+  const projectId = String(formData.get("projectId") ?? "");
+  const memo = String(formData.get("memo") ?? "").trim().slice(0, 500);
+  const supabase = await createClient();
+
+  if (!supabase) {
+    redirect("/dashboard?error=supabase-not-configured");
+  }
+
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) {
+    redirect("/dashboard?error=login-required");
+  }
+
+  if (!projectId) {
+    redirect("/dashboard?error=project-not-found");
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ memo })
     .eq("id", projectId)
     .eq("owner_id", user.id);
 

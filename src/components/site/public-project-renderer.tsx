@@ -42,9 +42,13 @@ export function PublicProjectRenderer({
     ? allComponents.filter((component) => component.props.popupId === openPopupId)
     : [];
   const canvasHeight = getCanvasHeight(pageLayouts);
+  const pageBackground = page.canvasBackground ?? project.pages[0]?.canvasBackground ?? "#ffffff";
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-white text-zinc-950">
+    <main
+      className="min-h-screen overflow-x-hidden text-zinc-950"
+      style={{ backgroundColor: pageBackground }}
+    >
       <header className="mx-auto flex min-h-16 w-full max-w-[920px] items-center justify-between gap-3 px-3 py-3 sm:px-4">
         <a
           href={isScrollMode ? "#" : `/${project.slug}`}

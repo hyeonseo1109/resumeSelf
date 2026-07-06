@@ -11,6 +11,7 @@ create table if not exists public.projects (
   owner_id uuid not null references public.users(id) on delete cascade,
   title text not null,
   slug text not null unique,
+  memo text not null default '',
   mode text not null check (mode in ('template', 'free')),
   navigation_mode text not null default 'scroll' check (navigation_mode in ('router', 'scroll')),
   navigation jsonb not null default '[]'::jsonb,
@@ -21,6 +22,9 @@ create table if not exists public.projects (
 
 alter table public.projects
   alter column published_at set default now();
+
+alter table public.projects
+  add column if not exists memo text not null default '';
 
 update public.projects
 set published_at = coalesce(published_at, updated_at, now())

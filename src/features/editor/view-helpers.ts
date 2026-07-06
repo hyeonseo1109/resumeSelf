@@ -20,6 +20,14 @@ export const FONT_OPTIONS = [
   { label: "Mono", value: "'SFMono-Regular', Consolas, monospace" },
   { label: "Pretendard", value: "Pretendard, Arial, sans-serif" },
   { label: "Noto Sans KR", value: "'Noto Sans KR', Arial, sans-serif" },
+  { label: "S-Core Dream", value: "'S-Core Dream', Arial, sans-serif" },
+  { label: "Gmarket Sans", value: "'Gmarket Sans', Arial, sans-serif" },
+];
+
+export const FONT_WEIGHT_OPTIONS = [
+  { label: "얇음", value: 300 },
+  { label: "중간", value: 500 },
+  { label: "두꺼움", value: 700 },
 ];
 
 export const PDF_PAGE_WIDTH = 840;
@@ -59,6 +67,59 @@ export function getTextStyle(component: ResumeComponent): CSSProperties {
   };
 }
 
+export function normalizeFontWeight(value: unknown) {
+  const weight = Number(value ?? 500);
+
+  if (weight >= 650) {
+    return 700;
+  }
+
+  if (weight <= 350) {
+    return 300;
+  }
+
+  return 500;
+}
+
+export function getImageCropInset(component: ResumeComponent) {
+  return {
+    top: Number(component.props.cropTop ?? 0),
+    right: Number(component.props.cropRight ?? 0),
+    bottom: Number(component.props.cropBottom ?? 0),
+    left: Number(component.props.cropLeft ?? 0),
+  };
+}
+
+export function getImageCropClipPath(component: ResumeComponent) {
+  const crop = getImageCropInset(component);
+  return `inset(${crop.top}% ${crop.right}% ${crop.bottom}% ${crop.left}%)`;
+}
+
+export function getImageMediaStyle(component: ResumeComponent): CSSProperties {
+  if (
+    typeof component.props.mediaWidth === "number" ||
+    typeof component.props.mediaHeight === "number" ||
+    typeof component.props.mediaOffsetX === "number" ||
+    typeof component.props.mediaOffsetY === "number"
+  ) {
+    return {
+      left: `${Number(component.props.mediaOffsetX ?? 0)}px`,
+      top: `${Number(component.props.mediaOffsetY ?? 0)}px`,
+      width: `${Number(component.props.mediaWidth ?? component.width)}px`,
+      height: `${Number(component.props.mediaHeight ?? component.height)}px`,
+      objectFit: String(component.props.objectFit ?? "contain") as CSSProperties["objectFit"],
+    };
+  }
+
+  return {
+    inset: "0",
+    width: "100%",
+    height: "100%",
+    clipPath: getImageCropClipPath(component),
+    objectFit: String(component.props.objectFit ?? "contain") as CSSProperties["objectFit"],
+  };
+}
+
 export function getComponentLayer(component: ResumeComponent) {
   if (component.type === "section") {
     return 0;
@@ -76,7 +137,7 @@ export function getComponentLayer(component: ResumeComponent) {
 }
 
 export function hasTypography(component: ResumeComponent) {
-  return ["text", "button", "link", "section", "container", "popup"].includes(
+  return ["text", "button", "icon", "link", "section", "container", "popup"].includes(
     component.type,
   );
 }
