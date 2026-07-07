@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
 import { PublicProjectRenderer } from "@/components/site/public-project-renderer";
-import { getProjectBySlug } from "@/server/projects";
+import { getPublicProjectBySlug } from "@/server/projects";
+
+export const revalidate = 15;
 
 export default async function PublicSitePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const project = await getProjectBySlug(slug);
+  const project = await getPublicProjectBySlug(slug);
 
   if (!project) {
     notFound();
@@ -18,4 +20,3 @@ export default async function PublicSitePage({ params }: { params: Promise<{ slu
 
   return <PublicProjectRenderer project={project} page={page} />;
 }
-

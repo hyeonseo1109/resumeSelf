@@ -28,6 +28,12 @@ export default async function Home() {
               Dashboard 시작
               <ArrowRight className="size-4" />
             </Link>
+            <Link
+              href="/content"
+              className="inline-flex h-11 items-center gap-2 rounded-md border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 hover:bg-zinc-50"
+            >
+              내용 검토
+            </Link>
           </div>
         </section>
 

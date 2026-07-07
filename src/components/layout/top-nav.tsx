@@ -30,12 +30,18 @@ export async function TopNav() {
           RESUMESELF
         </Link>
         <nav className="flex items-center gap-2">
-          {/* <Link
+          <Link
+            href="/content"
+            className="rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 border border-zinc-200 bg-white"
+          >
+            내용 검토
+          </Link>
+          <Link
             href="/dashboard"
-            className="rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100"
+            className="rounded-md px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 border border-zinc-200 bg-white"
           >
             Dashboard
-          </Link> */}
+          </Link>
           <div className="flex items-center gap-2">
             {displayName ? (
               <>

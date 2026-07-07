@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { ResumePage, ResumeProject } from "@/types/project";
 import { DesktopProjectCanvas } from "./public-renderer/desktop-project-canvas";
@@ -50,24 +51,35 @@ export function PublicProjectRenderer({
       style={{ backgroundColor: pageBackground }}
     >
       <header className="mx-auto flex min-h-16 w-full max-w-[920px] items-center justify-between gap-3 px-3 py-3 sm:px-4">
-        <a
-          href={isScrollMode ? "#" : `/${project.slug}`}
-          className="min-w-0 truncate font-semibold hover:text-emerald-700"
-        >
-          {project.title}
-        </a>
+        {isScrollMode ? (
+          <a
+            href="#"
+            className="min-w-0 truncate font-semibold hover:text-emerald-700"
+          >
+            {project.title}
+          </a>
+        ) : (
+          <Link
+            href={`/${project.slug}`}
+            prefetch
+            className="min-w-0 truncate font-semibold hover:text-emerald-700"
+          >
+            {project.title}
+          </Link>
+        )}
         {isScrollMode ? (
           <span className="text-xs font-medium text-zinc-400">Contents</span>
         ) : (
           <nav className="flex min-w-0 flex-wrap justify-end gap-2">
             {project.navigation.map((item) => (
-              <a
+              <Link
                 key={item.id}
                 href={`/${project.slug}/${item.target}`}
+                prefetch
                 className="rounded-md px-2 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 sm:px-3 sm:py-2"
               >
                 {item.label}
-              </a>
+              </Link>
             ))}
           </nav>
         )}

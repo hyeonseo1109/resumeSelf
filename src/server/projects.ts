@@ -1,5 +1,7 @@
 import { starterResumeProject } from "@/config/templates";
+import { createPublicClient } from "@/lib/supabase/public";
 import { createClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
 import type { NavigationItem, ProjectMode, ResumePage, ResumeProject } from "@/types/project";
 
 function buildEmptyPage(label: string, slug: string, order: number): ResumePage {
@@ -138,6 +140,35 @@ export async function getProjectBySlug(slug: string): Promise<ResumeProject | nu
 
   return mapProject(data);
 }
+
+async function getPublicProjectBySlugUncached(slug: string): Promise<ResumeProject | null> {
+  const supabase = createPublicClient();
+
+  if (!supabase) {
+    return slug === starterResumeProject.slug ? starterResumeProject : null;
+  }
+
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, owner_id, title, slug, memo, mode, navigation_mode, navigation, pages, updated_at, published_at")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return mapProject(data);
+}
+
+export const getPublicProjectBySlug = unstable_cache(
+  getPublicProjectBySlugUncached,
+  ["public-project-by-slug"],
+  {
+    revalidate: 15,
+    tags: ["public-projects"],
+  },
+);
 
 export async function getProjectById(projectId: string, ownerId: string): Promise<ResumeProject | null> {
   if (projectId === starterResumeProject.id && ownerId) {

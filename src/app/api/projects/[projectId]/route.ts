@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { NavigationItem, NavigationMode, ResumePage } from "@/types/project";
 
@@ -44,6 +45,8 @@ export async function PATCH(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
+
+  revalidateTag("public-projects", "max");
 
   return NextResponse.json({ ok: true });
 }

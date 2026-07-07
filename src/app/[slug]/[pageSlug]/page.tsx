@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { PublicProjectRenderer } from "@/components/site/public-project-renderer";
-import { getProjectBySlug } from "@/server/projects";
+import { getPublicProjectBySlug } from "@/server/projects";
+
+export const revalidate = 15;
 
 export default async function PublicNestedPage({
   params,
@@ -8,7 +10,7 @@ export default async function PublicNestedPage({
   params: Promise<{ slug: string; pageSlug: string }>;
 }) {
   const { slug, pageSlug } = await params;
-  const project = await getProjectBySlug(slug);
+  const project = await getPublicProjectBySlug(slug);
 
   if (!project) {
     notFound();
@@ -22,4 +24,3 @@ export default async function PublicNestedPage({
 
   return <PublicProjectRenderer project={project} page={page} />;
 }
-

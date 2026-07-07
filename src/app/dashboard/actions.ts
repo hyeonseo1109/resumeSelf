@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getSubscriptionTier, projectLimits } from "@/config/plans";
 import { appendSlugSuffix, createSlugCandidate } from "@/lib/utils/slug";
 import { createClient } from "@/lib/supabase/server";
@@ -177,6 +177,8 @@ export async function createProjectAction(formData: FormData) {
     redirect(`/dashboard?error=${encodeURIComponent(error?.message ?? "create-failed")}`);
   }
 
+  revalidateTag("public-projects", "max");
+
   redirect(`/editor/${data.id}`);
 }
 
@@ -244,6 +246,8 @@ export async function duplicateProjectAction(formData: FormData) {
     redirect(`/dashboard?error=${encodeURIComponent(error?.message ?? "duplicate-failed")}`);
   }
 
+  revalidateTag("public-projects", "max");
+
   redirect(`/editor/${data.id}`);
 }
 
@@ -272,6 +276,7 @@ export async function deleteProjectAction(formData: FormData) {
     redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
   }
 
+  revalidateTag("public-projects", "max");
   revalidatePath("/dashboard");
 }
 
@@ -306,6 +311,7 @@ export async function updateProjectSlugAction(formData: FormData) {
     redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
   }
 
+  revalidateTag("public-projects", "max");
   revalidatePath("/dashboard");
 }
 
