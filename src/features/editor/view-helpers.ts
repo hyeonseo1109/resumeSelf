@@ -96,21 +96,6 @@ export function getImageCropClipPath(component: ResumeComponent) {
 }
 
 export function getImageMediaStyle(component: ResumeComponent): CSSProperties {
-  if (
-    typeof component.props.mediaWidth === "number" ||
-    typeof component.props.mediaHeight === "number" ||
-    typeof component.props.mediaOffsetX === "number" ||
-    typeof component.props.mediaOffsetY === "number"
-  ) {
-    return {
-      left: `${Number(component.props.mediaOffsetX ?? 0)}px`,
-      top: `${Number(component.props.mediaOffsetY ?? 0)}px`,
-      width: `${Number(component.props.mediaWidth ?? component.width)}px`,
-      height: `${Number(component.props.mediaHeight ?? component.height)}px`,
-      objectFit: String(component.props.objectFit ?? "contain") as CSSProperties["objectFit"],
-    };
-  }
-
   return {
     inset: "0",
     width: "100%",

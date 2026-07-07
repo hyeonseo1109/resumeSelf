@@ -357,6 +357,37 @@ export function EditorShell({ project }: EditorShellProps) {
         return;
       }
 
+      const arrowDelta =
+        event.key === "ArrowLeft"
+          ? { x: -1, y: 0 }
+          : event.key === "ArrowRight"
+            ? { x: 1, y: 0 }
+            : event.key === "ArrowUp"
+              ? { x: 0, y: -1 }
+              : event.key === "ArrowDown"
+                ? { x: 0, y: 1 }
+                : null;
+
+      if (arrowDelta) {
+        const ids =
+          selectedComponentIds.length > 0
+            ? selectedComponentIds
+            : selectedComponentId
+              ? [selectedComponentId]
+              : [];
+
+        if (ids.length > 0) {
+          event.preventDefault();
+          recordHistory();
+          const distance = event.shiftKey ? 10 : 1;
+          moveComponents(ids, {
+            x: arrowDelta.x * distance,
+            y: arrowDelta.y * distance,
+          });
+        }
+        return;
+      }
+
       if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         deleteSelectedComponents();
@@ -1682,8 +1713,20 @@ function CanvasComponent({
     disabled: preview,
   });
   const [textDraft, setTextDraft] = useState(component.content ?? "");
+  const [cropDraft, setCropDraft] = useState<{
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  } | null>(null);
   const textStyle = getTextStyle(component);
   const borderRadius = Number(component.props.borderRadius ?? 6);
+  const cropHandleFrame = cropDraft ?? {
+    left: (Number(component.props.cropLeft ?? 0) / 100) * component.width,
+    top: (Number(component.props.cropTop ?? 0) / 100) * component.height,
+    right: (Number(component.props.cropRight ?? 0) / 100) * component.width,
+    bottom: (Number(component.props.cropBottom ?? 0) / 100) * component.height,
+  };
 
   const style: CSSProperties = {
     width: component.width,
@@ -1747,86 +1790,67 @@ function CanvasComponent({
 
     const startX = event.clientX;
     const startY = event.clientY;
-    const initialComponent = { ...component };
-    const initialMedia = {
-      width: Number(component.props.mediaWidth ?? component.width),
-      height: Number(component.props.mediaHeight ?? component.height),
-      offsetX: Number(component.props.mediaOffsetX ?? 0),
-      offsetY: Number(component.props.mediaOffsetY ?? 0),
+    const initialCrop = {
+      top: Number(component.props.cropTop ?? 0),
+      right: Number(component.props.cropRight ?? 0),
+      bottom: Number(component.props.cropBottom ?? 0),
+      left: Number(component.props.cropLeft ?? 0),
     };
-    const minSize = 32;
+    const maxCrop = 92;
+    let currentCrop = { ...initialCrop };
 
     function handlePointerMove(pointerEvent: PointerEvent) {
-      const deltaX = (pointerEvent.clientX - startX) / interactionScale;
-      const deltaY = (pointerEvent.clientY - startY) / interactionScale;
-      const next = {
-        x: initialComponent.x,
-        y: initialComponent.y,
-        width: initialComponent.width,
-        height: initialComponent.height,
-        mediaOffsetX: initialMedia.offsetX,
-        mediaOffsetY: initialMedia.offsetY,
-      };
+      const deltaXPercent =
+        ((pointerEvent.clientX - startX) / interactionScale / Math.max(component.width, 1)) * 100;
+      const deltaYPercent =
+        ((pointerEvent.clientY - startY) / interactionScale / Math.max(component.height, 1)) * 100;
+      const nextCrop = { ...initialCrop };
 
       if (corner.includes("top")) {
-        const limitedDelta = clamp(
-          deltaY,
-          Math.max(-initialComponent.y, initialMedia.offsetY),
-          initialComponent.height - minSize,
+        nextCrop.top = Math.round(
+          clamp(initialCrop.top + deltaYPercent, 0, maxCrop - initialCrop.bottom),
         );
-        next.y = Math.round(initialComponent.y + limitedDelta);
-        next.height = Math.round(initialComponent.height - limitedDelta);
-        next.mediaOffsetY = Math.round(initialMedia.offsetY - limitedDelta);
       }
       if (corner.includes("bottom")) {
-        next.height = Math.round(
-          clamp(
-            initialComponent.height + deltaY,
-            minSize,
-            initialMedia.height + initialMedia.offsetY,
-          ),
+        nextCrop.bottom = Math.round(
+          clamp(initialCrop.bottom - deltaYPercent, 0, maxCrop - initialCrop.top),
         );
       }
       if (corner.includes("Left")) {
-        const limitedDelta = clamp(
-          deltaX,
-          Math.max(-initialComponent.x, initialMedia.offsetX),
-          initialComponent.width - minSize,
+        nextCrop.left = Math.round(
+          clamp(initialCrop.left + deltaXPercent, 0, maxCrop - initialCrop.right),
         );
-        next.x = Math.round(initialComponent.x + limitedDelta);
-        next.width = Math.round(initialComponent.width - limitedDelta);
-        next.mediaOffsetX = Math.round(initialMedia.offsetX - limitedDelta);
       }
       if (corner.includes("Right")) {
-        next.width = Math.round(
-          clamp(
-            initialComponent.width + deltaX,
-            minSize,
-            initialMedia.width + initialMedia.offsetX,
-          ),
+        nextCrop.right = Math.round(
+          clamp(initialCrop.right - deltaXPercent, 0, maxCrop - initialCrop.left),
         );
       }
 
-      onUpdate({
-        x: next.x,
-        y: next.y,
-        width: next.width,
-        height: next.height,
-        props: {
-          ...component.props,
-          cropTop: 0,
-          cropRight: 0,
-          cropBottom: 0,
-          cropLeft: 0,
-          mediaWidth: initialMedia.width,
-          mediaHeight: initialMedia.height,
-          mediaOffsetX: next.mediaOffsetX,
-          mediaOffsetY: next.mediaOffsetY,
-        },
+      currentCrop = nextCrop;
+      setCropDraft({
+        left: (nextCrop.left / 100) * component.width,
+        top: (nextCrop.top / 100) * component.height,
+        right: (nextCrop.right / 100) * component.width,
+        bottom: (nextCrop.bottom / 100) * component.height,
       });
     }
 
     function handlePointerUp() {
+      onUpdate({
+        props: {
+          ...component.props,
+          cropTop: currentCrop.top,
+          cropRight: currentCrop.right,
+          cropBottom: currentCrop.bottom,
+          cropLeft: currentCrop.left,
+          mediaWidth: null,
+          mediaHeight: null,
+          mediaOffsetX: null,
+          mediaOffsetY: null,
+        },
+      });
+      setCropDraft(null);
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     }
@@ -1855,7 +1879,7 @@ function CanvasComponent({
         isSelected && "outline-2 outline-emerald-500",
       )}
     >
-      {!preview ? (
+      {!preview && isSelected ? (
         <button
           type="button"
           data-editor-control="true"
@@ -1909,6 +1933,7 @@ function CanvasComponent({
         </div>
       ) : component.type === "image" && component.content ? (
         <div
+          data-image-crop-frame="true"
           className="relative h-full w-full overflow-hidden"
           style={{ borderRadius }}
         >
@@ -1919,10 +1944,43 @@ function CanvasComponent({
             className="absolute"
             style={{
               ...getImageMediaStyle(component),
+              clipPath: cropDraft
+                ? `inset(${cropDraft.top}px ${cropDraft.right}px ${cropDraft.bottom}px ${cropDraft.left}px)`
+                : getImageMediaStyle(component).clipPath,
             }}
           />
           {!preview && isCropEditing ? (
             <>
+              {cropDraft ? (
+                <>
+                  <div
+                    className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-zinc-950/25"
+                    style={{ height: cropHandleFrame.top }}
+                  />
+                  <div
+                    className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-zinc-950/25"
+                    style={{ height: cropHandleFrame.bottom }}
+                  />
+                  <div
+                    className="pointer-events-none absolute z-10 bg-zinc-950/25"
+                    style={{
+                      left: 0,
+                      top: cropHandleFrame.top,
+                      bottom: cropHandleFrame.bottom,
+                      width: cropHandleFrame.left,
+                    }}
+                  />
+                  <div
+                    className="pointer-events-none absolute z-10 bg-zinc-950/25"
+                    style={{
+                      right: 0,
+                      top: cropHandleFrame.top,
+                      bottom: cropHandleFrame.bottom,
+                      width: cropHandleFrame.right,
+                    }}
+                  />
+                </>
+              ) : null}
               {(["topLeft", "topRight", "bottomLeft", "bottomRight"] as const).map((corner) => (
                 <button
                   key={corner}
@@ -1943,19 +2001,19 @@ function CanvasComponent({
                   style={{
                     left:
                       corner === "topLeft" || corner === "bottomLeft"
-                        ? 0
+                        ? cropHandleFrame.left
                         : undefined,
                     right:
                       corner === "topRight" || corner === "bottomRight"
-                        ? 0
+                        ? cropHandleFrame.right
                         : undefined,
                     top:
                       corner === "topLeft" || corner === "topRight"
-                        ? 0
+                        ? cropHandleFrame.top
                         : undefined,
                     bottom:
                       corner === "bottomLeft" || corner === "bottomRight"
-                        ? 0
+                        ? cropHandleFrame.bottom
                         : undefined,
                   }}
                   aria-label="Crop image"
@@ -2134,7 +2192,7 @@ function CanvasComponent({
           {component.type}
         </div>
       )}
-      {!preview ? (
+      {!preview && isSelected ? (
         <button
           type="button"
           data-editor-control="true"
@@ -2187,11 +2245,23 @@ function PopupOverlay({
   const popupWindowBackground = String(
     popup.props.popupBackgroundColor ?? "#ffffff",
   );
+  const canvasRect =
+    !preview && typeof document !== "undefined"
+      ? document.getElementById("resume-canvas")?.getBoundingClientRect()
+      : null;
+  const popupFrameStyle: CSSProperties = {
+    left: canvasRect ? `${canvasRect.left + canvasRect.width / 2}px` : "50%",
+    width: canvasRect
+      ? `${Math.min(840, Math.max(320, canvasRect.width - 32))}px`
+      : "min(calc(100vw - 2rem), 840px)",
+    transform: "translateX(-50%)",
+    backgroundColor: popupWindowBackground,
+  };
 
   return (
     <div
-      className="fixed inset-x-3 top-20 z-[70] mx-auto max-h-[78vh] w-[calc(100vw-1.5rem)] max-w-[840px] overflow-hidden rounded-lg border border-zinc-200 shadow-2xl sm:inset-x-6 sm:w-[calc(100vw-3rem)]"
-      style={{ backgroundColor: popupWindowBackground }}
+      className="fixed top-20 z-[120] max-h-[78vh] min-w-[320px] overflow-hidden rounded-lg border border-zinc-200 shadow-2xl"
+      style={popupFrameStyle}
     >
       <div
         className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-zinc-100 px-5"
@@ -2251,7 +2321,9 @@ function PopupOverlay({
               onUpdate={(patch) => onUpdateComponent(component.id, patch)}
             />
           ))}
-          <GuideOverlay guideLines={guideLines} spacingGuides={spacingGuides} />
+          <div className="pointer-events-none absolute inset-0 z-[140]">
+            <GuideOverlay guideLines={guideLines} spacingGuides={spacingGuides} />
+          </div>
         </div>
       </div>
     </div>
