@@ -59,6 +59,7 @@ export interface ResumeProject {
   title: string;
   slug: string;
   memo?: string;
+  deleteLocked?: boolean;
   mode: ProjectMode;
   navigationMode: NavigationMode;
   navigation: NavigationItem[];

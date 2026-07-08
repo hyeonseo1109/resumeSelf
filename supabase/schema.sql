@@ -12,6 +12,7 @@ create table if not exists public.projects (
   title text not null,
   slug text not null unique,
   memo text not null default '',
+  delete_locked boolean not null default false,
   mode text not null check (mode in ('template', 'free')),
   navigation_mode text not null default 'scroll' check (navigation_mode in ('router', 'scroll')),
   navigation jsonb not null default '[]'::jsonb,
@@ -25,6 +26,9 @@ alter table public.projects
 
 alter table public.projects
   add column if not exists memo text not null default '';
+
+alter table public.projects
+  add column if not exists delete_locked boolean not null default false;
 
 update public.projects
 set published_at = coalesce(published_at, updated_at, now())

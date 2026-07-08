@@ -68,6 +68,7 @@ function mapProject(data: {
   title: string;
   slug: string;
   memo: string | null;
+  delete_locked: boolean | null;
   mode: ProjectMode;
   navigation_mode: ResumeProject["navigationMode"];
   navigation: NavigationItem[] | null;
@@ -81,6 +82,7 @@ function mapProject(data: {
     title: data.title,
     slug: data.slug,
     memo: data.memo ?? "",
+    deleteLocked: data.delete_locked ?? false,
     mode: data.mode,
     navigationMode: data.navigation_mode,
     navigation: data.navigation ?? [],
@@ -110,7 +112,7 @@ export async function listProjects(ownerId?: string): Promise<ResumeProject[]> {
 
   const { data, error } = await supabase
     .from("projects")
-    .select("id, owner_id, title, slug, memo, mode, navigation_mode, navigation, pages, updated_at, published_at")
+    .select("id, owner_id, title, slug, memo, delete_locked, mode, navigation_mode, navigation, pages, updated_at, published_at")
     .eq("owner_id", ownerId)
     .order("updated_at", { ascending: false });
 
@@ -130,7 +132,7 @@ export async function getProjectBySlug(slug: string): Promise<ResumeProject | nu
 
   const { data, error } = await supabase
     .from("projects")
-    .select("id, owner_id, title, slug, memo, mode, navigation_mode, navigation, pages, updated_at, published_at")
+    .select("id, owner_id, title, slug, memo, delete_locked, mode, navigation_mode, navigation, pages, updated_at, published_at")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -150,7 +152,7 @@ async function getPublicProjectBySlugUncached(slug: string): Promise<ResumeProje
 
   const { data, error } = await supabase
     .from("projects")
-    .select("id, owner_id, title, slug, memo, mode, navigation_mode, navigation, pages, updated_at, published_at")
+    .select("id, owner_id, title, slug, memo, delete_locked, mode, navigation_mode, navigation, pages, updated_at, published_at")
     .eq("slug", slug)
     .maybeSingle();
 

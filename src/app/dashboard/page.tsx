@@ -6,6 +6,7 @@ import {
   createProjectAction,
   deleteProjectAction,
   duplicateProjectAction,
+  updateProjectDeleteLockAction,
   updateProjectMemoAction,
   updateProjectSlugAction,
 } from "@/app/dashboard/actions";
@@ -55,6 +56,7 @@ export default async function DashboardPage({
           createAction={createProjectAction}
           duplicateAction={duplicateProjectAction}
           deleteAction={deleteProjectAction}
+          updateDeleteLockAction={updateProjectDeleteLockAction}
           updateMemoAction={updateProjectMemoAction}
           updateSlugAction={updateProjectSlugAction}
         />

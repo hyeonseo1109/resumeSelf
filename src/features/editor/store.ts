@@ -37,6 +37,10 @@ function getNextPageLabel(existingLabels: string[]) {
   return label;
 }
 
+function isComponentLocked(component: ResumeComponent) {
+  return component.props.locked === true;
+}
+
 interface EditorState {
   project: ResumeProject;
   activePageId: string;
@@ -335,7 +339,25 @@ export function createEditorStore(initialProject: ResumeProject) {
       }),
     removeComponents: (ids) =>
       set((state) => {
-        const removeIds = new Set(ids);
+        const requestedRemoveIds = new Set(ids);
+        const lockedIds = new Set<string>();
+
+        state.project.pages.forEach((page) => {
+          page.sections.forEach((section) => {
+            section.components.forEach((component) => {
+              if (requestedRemoveIds.has(component.id) && isComponentLocked(component)) {
+                lockedIds.add(component.id);
+              }
+            });
+          });
+        });
+
+        const removeIds = new Set(ids.filter((id) => !lockedIds.has(id)));
+
+        if (removeIds.size === 0) {
+          return state;
+        }
+
         const selectedComponent =
           state.selectedComponentId && removeIds.has(state.selectedComponentId)
             ? null
@@ -384,20 +406,31 @@ export function createEditorStore(initialProject: ResumeProject) {
         };
       }),
     removeComponent: (id) =>
-      set((state) => ({
-        saveStatus: "dirty",
-        selectedComponentId: state.selectedComponentId === id ? null : state.selectedComponentId,
-        project: {
-          ...state.project,
-          pages: state.project.pages.map((page) => ({
-            ...page,
-            sections: page.sections.map((section) => ({
-              ...section,
-              components: section.components.filter((component) => component.id !== id),
+      set((state) => {
+        const component = state.project.pages
+          .flatMap((page) => page.sections)
+          .flatMap((section) => section.components)
+          .find((item) => item.id === id);
+
+        if (!component || isComponentLocked(component)) {
+          return state;
+        }
+
+        return {
+          saveStatus: "dirty",
+          selectedComponentId: state.selectedComponentId === id ? null : state.selectedComponentId,
+          project: {
+            ...state.project,
+            pages: state.project.pages.map((page) => ({
+              ...page,
+              sections: page.sections.map((section) => ({
+                ...section,
+                components: section.components.filter((item) => item.id !== id),
+              })),
             })),
-          })),
-        },
-      })),
+          },
+        };
+      }),
     addNavigationPage: () =>
       set((state) => {
         const order = state.project.navigation.length;

@@ -15,10 +15,12 @@ import {
   ChevronDown,
   LayoutDashboard,
   Link2,
+  Lock,
   Magnet,
   Pencil,
   Save,
   Trash2,
+  Unlock,
   Upload,
   X,
 } from "lucide-react";
@@ -205,6 +207,15 @@ export function EditorShell({ project }: EditorShellProps) {
   const selectedComponent =
     components.find((component) => component.id === selectedComponentId) ??
     null;
+  const lockedComponentIds = useMemo(
+    () =>
+      new Set(
+        components
+          .filter((component) => component.props.locked === true)
+          .map((component) => component.id),
+      ),
+    [components],
+  );
   const activeCropEditingId =
     selectedComponent?.type === "image" && selectedComponent.id === cropEditingId
       ? cropEditingId
@@ -316,11 +327,23 @@ export function EditorShell({ project }: EditorShellProps) {
       return;
     }
 
+    const removableSelectedIds = selectedComponentIds.filter(
+      (id) => !lockedComponentIds.has(id),
+    );
+
+    if (removableSelectedIds.length === 0) {
+      return;
+    }
+
     recordHistory();
-    const idsToRemove = getPopupRelatedIds(selectedComponentIds);
+    const idsToRemove = getPopupRelatedIds(removableSelectedIds);
     removeComponents(idsToRemove);
-    setSelectedComponentIds([]);
-    selectComponent(null);
+    setSelectedComponentIds((ids) =>
+      ids.filter((id) => !removableSelectedIds.includes(id)),
+    );
+    if (selectedComponentId && removableSelectedIds.includes(selectedComponentId)) {
+      selectComponent(null);
+    }
   }
 
   function isEditableTarget(target: EventTarget | null) {
@@ -587,6 +610,11 @@ export function EditorShell({ project }: EditorShellProps) {
         selectComponent(nextIds.at(-1) ?? null);
         return nextIds;
       });
+      return;
+    }
+
+    if (selectedComponentIds.length > 1 && selectedComponentIds.includes(id)) {
+      selectComponent(id);
       return;
     }
 
@@ -1465,9 +1493,13 @@ export function EditorShell({ project }: EditorShellProps) {
                     displayTop={displayTop}
                     preview={mode === "preview"}
                     isSelected={selectedComponentIds.includes(component.id)}
+                    isLocked={component.props.locked === true}
                     isCropEditing={activeCropEditingId === component.id}
                     onSelect={(event) => handleComponentSelect(component.id, event)}
                     onDelete={() => {
+                      if (component.props.locked === true) {
+                        return;
+                      }
                       recordHistory();
                       removeComponents(getPopupRelatedIds([component.id]));
                       setSelectedComponentIds((ids) => ids.filter((id) => id !== component.id));
@@ -1526,6 +1558,9 @@ export function EditorShell({ project }: EditorShellProps) {
               setCropEditingId((currentId) => (currentId === id ? null : id))
             }
             onDelete={(id) => {
+              if (lockedComponentIds.has(id)) {
+                return;
+              }
               recordHistory();
               removeComponents(getPopupRelatedIds([id]));
               setSelectedComponentIds((ids) => ids.filter((selectedId) => selectedId !== id));
@@ -1684,6 +1719,7 @@ function CanvasComponent({
   displayTop,
   preview,
   isSelected,
+  isLocked,
   isCropEditing,
   onSelect,
   onDelete,
@@ -1698,6 +1734,7 @@ function CanvasComponent({
   displayTop: number;
   preview: boolean;
   isSelected: boolean;
+  isLocked: boolean;
   isCropEditing: boolean;
   onSelect: (event?: ReactMouseEvent<HTMLDivElement>) => void;
   onDelete: () => void;
@@ -1874,21 +1911,30 @@ function CanvasComponent({
       }}
       className={cn(
         "absolute rounded-md",
+        !preview && "cursor-move",
         !preview &&
-          "cursor-move outline outline-1 outline-dashed outline-zinc-300",
-        isSelected && "outline-2 outline-emerald-500",
+          isSelected &&
+          "outline outline-2 outline-dashed outline-emerald-500",
       )}
     >
       {!preview && isSelected ? (
         <button
           type="button"
           data-editor-control="true"
+          disabled={isLocked}
+          title={isLocked ? "잠긴 컴포넌트는 삭제할 수 없습니다." : "삭제"}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
+            if (isLocked) {
+              return;
+            }
             onDelete();
           }}
-          className="absolute right-1 top-1 z-20 inline-flex size-6 items-center justify-center rounded bg-white/95 text-zinc-500 shadow-sm ring-1 ring-zinc-200 hover:text-red-600"
+          className={cn(
+            "absolute right-1 top-1 z-20 inline-flex size-6 items-center justify-center rounded bg-white/95 text-zinc-500 shadow-sm ring-1 ring-zinc-200 hover:text-red-600",
+            isLocked && "cursor-not-allowed opacity-35 hover:text-zinc-500",
+          )}
         >
           <X className="size-3.5" />
         </button>
@@ -2303,12 +2349,18 @@ function PopupOverlay({
               displayTop={component.y}
               preview={preview}
               isSelected={selectedComponentId === component.id}
+              isLocked={component.props.locked === true}
               isCropEditing={false}
               onSelect={(event) => {
                 event?.stopPropagation();
                 onSelect(component.id);
               }}
-              onDelete={() => onDelete(component.id)}
+              onDelete={() => {
+                if (component.props.locked === true) {
+                  return;
+                }
+                onDelete(component.id);
+              }}
               onResize={(deltaWidth, deltaHeight) =>
                 onResize(component, deltaWidth, deltaHeight)
               }
@@ -2432,12 +2484,49 @@ function PropertyPanel({
               </div>
               <button
                 type="button"
+                disabled={selectedComponent.props.locked === true}
+                title={
+                  selectedComponent.props.locked === true
+                    ? "잠긴 컴포넌트는 삭제할 수 없습니다."
+                    : "삭제"
+                }
                 onClick={() => onDelete(selectedComponent.id)}
-                className="inline-flex size-9 items-center justify-center rounded-md text-zinc-400 hover:bg-red-50 hover:text-red-600"
+                className={cn(
+                  "inline-flex size-9 items-center justify-center rounded-md text-zinc-400 hover:bg-red-50 hover:text-red-600",
+                  selectedComponent.props.locked === true &&
+                    "cursor-not-allowed opacity-35 hover:bg-transparent hover:text-zinc-400",
+                )}
               >
                 <Trash2 className="size-4" />
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                onUpdate(selectedComponent.id, {
+                  props: {
+                    ...selectedComponent.props,
+                    locked: selectedComponent.props.locked === true ? false : true,
+                  },
+                })
+              }
+              className={cn(
+                "inline-flex h-9 items-center justify-center gap-2 rounded-md border border-zinc-200 px-3 text-sm font-medium",
+                selectedComponent.props.locked === true
+                  ? "bg-zinc-950 text-white"
+                  : "text-zinc-700 hover:bg-zinc-50",
+              )}
+            >
+              {selectedComponent.props.locked === true ? (
+                <Lock className="size-4" />
+              ) : (
+                <Unlock className="size-4" />
+              )}
+              {selectedComponent.props.locked === true
+                ? "삭제 잠금 켜짐"
+                : "삭제 잠금"}
+            </button>
 
             {selectedComponent.type === "text" ? (
               <div className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">

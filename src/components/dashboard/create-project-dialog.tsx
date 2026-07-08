@@ -88,8 +88,6 @@ export function CreateProjectDialog({
                     <span className="block text-sm font-medium text-zinc-950">
                       Template Mode
                     </span>
-                    rounded-md px-3 py-2 text-sm font-medium text-zinc-700
-                    hover:bg-zinc-100
                     <span className="mt-1 block text-xs leading-5 text-zinc-500">
                       미리 구성된 이력서 템플릿에서 내용만 바꿉니다.
                     </span>

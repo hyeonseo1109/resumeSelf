@@ -178,6 +178,7 @@ export async function createProjectAction(formData: FormData) {
   }
 
   revalidateTag("public-projects", "max");
+  revalidatePath("/dashboard");
 
   redirect(`/editor/${data.id}`);
 }
@@ -210,7 +211,7 @@ export async function duplicateProjectAction(formData: FormData) {
 
   const { data: source, error: sourceError } = await supabase
     .from("projects")
-    .select("title, slug, memo, mode, navigation_mode, navigation, pages")
+    .select("title, slug, memo, delete_locked, mode, navigation_mode, navigation, pages")
     .eq("id", projectId)
     .eq("owner_id", user.id)
     .maybeSingle();
@@ -233,6 +234,7 @@ export async function duplicateProjectAction(formData: FormData) {
       title: `${source.title} Copy`,
       slug,
       memo: source.memo ?? "",
+      delete_locked: false,
       mode: source.mode,
       navigation_mode: source.navigation_mode,
       navigation,
@@ -270,13 +272,47 @@ export async function deleteProjectAction(formData: FormData) {
     .from("projects")
     .delete()
     .eq("id", projectId)
-    .eq("owner_id", user.id);
+    .eq("owner_id", user.id)
+    .eq("delete_locked", false);
 
   if (error) {
     redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
   }
 
   revalidateTag("public-projects", "max");
+  revalidatePath("/dashboard");
+}
+
+export async function updateProjectDeleteLockAction(formData: FormData) {
+  const projectId = String(formData.get("projectId") ?? "");
+  const deleteLocked = String(formData.get("deleteLocked") ?? "") === "true";
+  const supabase = await createClient();
+
+  if (!supabase) {
+    redirect("/dashboard?error=supabase-not-configured");
+  }
+
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) {
+    redirect("/dashboard?error=login-required");
+  }
+
+  if (!projectId) {
+    redirect("/dashboard?error=project-not-found");
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ delete_locked: deleteLocked })
+    .eq("id", projectId)
+    .eq("owner_id", user.id);
+
+  if (error) {
+    redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
+  }
+
   revalidatePath("/dashboard");
 }
 
