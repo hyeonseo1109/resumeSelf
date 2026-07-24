@@ -45,12 +45,9 @@ export function ContentWritingTool() {
       return;
     }
 
-    setText((current) => {
-      const nextText = String(data.text ?? "");
-      return current.trim() ? `${current}\n${nextText}` : nextText;
-    });
+    setText(String(data.text ?? ""));
     setOcrStatus("idle");
-    setOcrMessage("이미지 텍스트를 본문에 추가했습니다.");
+    setOcrMessage("이미지 텍스트로 본문을 교체했습니다.");
   }
 
   async function copyText() {
