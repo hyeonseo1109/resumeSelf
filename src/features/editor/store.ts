@@ -76,7 +76,9 @@ interface EditorState {
 function getComponentSize(type: ComponentType) {
   return {
     width:
-      type === "divider"
+      type === "textbox"
+        ? 760
+        : type === "divider"
         ? 520
         : type === "icon"
           ? 72
@@ -86,7 +88,9 @@ function getComponentSize(type: ComponentType) {
             ? 320
             : 360,
     height:
-      type === "text"
+      type === "textbox"
+        ? 860
+        : type === "text"
         ? 96
         : type === "section"
           ? 320
@@ -112,6 +116,8 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
     content:
       type === "text"
         ? "새 텍스트를 입력하세요"
+        : type === "textbox"
+          ? "<p>긴 글을 여기에 입력하세요.</p>"
         : type === "button"
           ? "버튼"
             : type === "link"
@@ -128,6 +134,15 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
     props:
       type === "link"
         ? { href: "https://example.com" }
+        : type === "textbox"
+          ? {
+              backgroundColor: "#ffffff",
+              backgroundOpacity: 0,
+              borderRadius: 0,
+              color: "#111827",
+              fontSize: 18,
+              fontWeight: 400,
+            }
         : type === "divider"
           ? {
               orientation: "horizontal",

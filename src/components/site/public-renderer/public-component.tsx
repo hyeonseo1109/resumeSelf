@@ -6,6 +6,7 @@ import {
   getImageMediaStyle,
   withAlpha,
 } from "@/features/editor/view-helpers";
+import { richTextToPlainText, sanitizeRichTextHtml } from "@/lib/utils/rich-text";
 import type { ResumeComponent } from "@/types/project";
 import { getMobileComponentHeight, normalizeAnchor } from "./layout";
 
@@ -44,7 +45,7 @@ export function PublicComponent({
             }
       }
     >
-      {component.type === "text" ? (
+      {component.type === "text" || component.type === "textbox" ? (
         <div
           className="h-full w-full whitespace-pre-wrap wrap-break-words p-2"
           style={{
@@ -54,9 +55,8 @@ export function PublicComponent({
               ? withAlpha(String(component.props.backgroundColor), Number(component.props.backgroundOpacity ?? 100))
               : undefined,
           }}
-        >
-          {component.content}
-        </div>
+          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "") }}
+        />
       ) : component.type === "divider" ? (
         <div className="flex h-full w-full items-center justify-center">
           <span style={getDividerStyle(component)} />
@@ -110,9 +110,8 @@ export function PublicComponent({
             backgroundColor: withAlpha(String(component.props.backgroundColor ?? "#ffffff"), Number(component.props.backgroundOpacity ?? 100)),
             color: String(component.props.color ?? "#18181b"),
           }}
-        >
-          {component.content ?? "링크"}
-        </a>
+          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "링크") }}
+        />
       ) : component.type === "popup" ? (
         <button
           type="button"
@@ -133,9 +132,10 @@ export function PublicComponent({
               decoding="async"
             />
           ) : null}
-          <span className={`px-3 text-sm font-semibold text-zinc-950 ${component.props.thumbnailUrl ? "pt-3" : "pt-4"}`}>
-            {component.content ?? "Popup title"}
-          </span>
+          <span
+            className={`px-3 text-sm font-semibold text-zinc-950 ${component.props.thumbnailUrl ? "pt-3" : "pt-4"}`}
+            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "Popup title") }}
+          />
           <span className="line-clamp-2 px-3 pb-3 pt-1 text-xs leading-5 text-zinc-500">
             {String(component.props.description ?? "")}
           </span>
@@ -168,16 +168,15 @@ export function PublicComponent({
         </div>
       ) : component.type === "section" || component.type === "container" ? (
         <div
-          id={component.type === "section" ? normalizeAnchor(component.content ?? component.id) : undefined}
+          id={component.type === "section" ? normalizeAnchor(richTextToPlainText(component.content ?? component.id)) : undefined}
           className="flex h-full w-full items-start border border-dashed p-3 text-sm font-medium text-zinc-600"
           style={{
             backgroundColor: withAlpha(String(component.props.backgroundColor ?? "#f8fafc"), Number(component.props.backgroundOpacity ?? 100)),
             borderColor: String(component.props.borderColor ?? "#d4d4d8"),
             borderRadius: `${borderRadius}px`,
           }}
-        >
-          {component.content}
-        </div>
+          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "") }}
+        />
       ) : (
         <div className="flex h-full items-center justify-center bg-zinc-100 text-sm text-zinc-500">
           {component.type}

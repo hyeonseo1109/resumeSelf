@@ -71,3 +71,36 @@ input,
 select {
   outline-color: #10b981;
 }
+
+.resume-rich-text-content {
+  cursor: text;
+  min-height: 100%;
+  outline: none;
+}
+
+.resume-rich-text-content * {
+  cursor: text;
+}
+
+.resume-rich-text-content p {
+  margin: 0 0 0.75em;
+}
+
+.resume-rich-text-content p:last-child {
+  margin-bottom: 0;
+}
+
+.resume-rich-text-content ul,
+.resume-rich-text-content ol {
+  margin: 0.5em 0 0.75em 1.25em;
+  padding: 0;
+}
+
+.resume-rich-color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.resume-rich-color-input::-webkit-color-swatch {
+  border: 0;
+  border-radius: 0.25rem;
+}

@@ -34,6 +34,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { iconOptions, insertableComponents } from "@/config/editor";
 import { NumberField } from "@/components/editor/number-field";
+import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { RouteSwitcher } from "@/components/editor/route-switcher";
 import { ScrollToc } from "@/components/editor/scroll-toc";
 import { SiteHeader } from "@/components/editor/site-header";
@@ -61,6 +62,7 @@ import {
 } from "@/features/editor/view-helpers";
 import { cn } from "@/lib/utils/cn";
 import { getPublicProjectUrl } from "@/lib/utils/site-url";
+import { richTextToPlainText, sanitizeRichTextHtml } from "@/lib/utils/rich-text";
 import type { ResumeComponent, ResumeProject } from "@/types/project";
 
 interface EditorShellProps {
@@ -1075,6 +1077,8 @@ export function EditorShell({ project }: EditorShellProps) {
             ? { width: 620, height: 220 }
             : type === "popup"
               ? { width: 320, height: 220 }
+              : type === "textbox"
+                ? { width: 760, height: 860 }
               : type === "text"
                 ? { width: 360, height: 96 }
                 : { width: 360, height: 140 };
@@ -1749,7 +1753,6 @@ function CanvasComponent({
     id: component.id,
     disabled: preview,
   });
-  const [textDraft, setTextDraft] = useState(component.content ?? "");
   const [cropDraft, setCropDraft] = useState<{
     left: number;
     top: number;
@@ -1758,6 +1761,10 @@ function CanvasComponent({
   } | null>(null);
   const textStyle = getTextStyle(component);
   const borderRadius = Number(component.props.borderRadius ?? 6);
+  const isRichTextComponent =
+    component.type === "text" ||
+    component.type === "textbox" ||
+    component.type === "link";
   const cropHandleFrame = cropDraft ?? {
     left: (Number(component.props.cropLeft ?? 0) / 100) * component.width,
     top: (Number(component.props.cropTop ?? 0) / 100) * component.height,
@@ -1911,7 +1918,7 @@ function CanvasComponent({
       }}
       className={cn(
         "absolute rounded-md",
-        !preview && "cursor-move",
+        !preview && (isRichTextComponent ? "cursor-default" : "cursor-move"),
         !preview &&
           isSelected &&
           "outline outline-2 outline-dashed outline-emerald-500",
@@ -1939,9 +1946,9 @@ function CanvasComponent({
           <X className="size-3.5" />
         </button>
       ) : null}
-      {component.type === "text" ? (
+      {component.type === "text" || component.type === "textbox" ? (
         <div
-          className="h-full w-full p-3"
+          className="h-full w-full overflow-visible p-3"
           style={{
             backgroundColor: String(
               component.props.backgroundColor
@@ -1954,23 +1961,12 @@ function CanvasComponent({
             borderRadius,
           }}
         >
-          <textarea
+          <RichTextEditor
             readOnly={preview}
-            value={textDraft}
-            onPointerDown={(event) => {
-              if (!preview) {
-                event.stopPropagation();
-                onSelect();
-              }
-            }}
-            onChange={(event) => setTextDraft(event.target.value)}
-            onBlur={() => {
-              if (textDraft !== (component.content ?? "")) {
-                onInlineTextChange(textDraft);
-              }
-            }}
-            className="h-full w-full resize-none overflow-hidden whitespace-pre-wrap border-0 bg-transparent p-0 text-zinc-900 outline-none"
-            style={textStyle}
+            value={component.content ?? ""}
+            baseStyle={textStyle}
+            onFocus={() => onSelect()}
+            onChange={onInlineTextChange}
           />
         </div>
       ) : component.type === "divider" ? (
@@ -2101,7 +2097,7 @@ function CanvasComponent({
         </button>
       ) : component.type === "link" && !preview ? (
         <div
-          className="flex h-full w-full items-center justify-center border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4"
+          className="h-full w-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 underline-offset-4"
           style={{
             ...textStyle,
             borderRadius,
@@ -2114,7 +2110,19 @@ function CanvasComponent({
             color: String(component.props.color ?? "#18181b"),
           }}
         >
-          {component.content ?? "링크"}
+          <RichTextEditor
+            readOnly={false}
+            value={component.content ?? "링크"}
+            baseStyle={{
+              ...textStyle,
+              display: "flex",
+              minHeight: "100%",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onFocus={() => onSelect()}
+            onChange={onInlineTextChange}
+          />
         </div>
       ) : component.type === "link" ? (
         <a
@@ -2133,9 +2141,8 @@ function CanvasComponent({
             ),
             color: String(component.props.color ?? "#18181b"),
           }}
-        >
-          {component.content ?? "링크"}
-        </a>
+          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "링크") }}
+        />
       ) : component.type === "popup" ? (
         <button
           type="button"
@@ -2171,9 +2178,8 @@ function CanvasComponent({
               "px-3 text-sm font-semibold text-zinc-950",
               component.props.thumbnailUrl ? "pt-3" : "pt-4",
             )}
-          >
-            {component.content ?? "Popup title"}
-          </span>
+            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "Popup title") }}
+          />
           <span className="line-clamp-2 px-3 pb-3 pt-1 text-xs leading-5 text-zinc-500">
             {String(
               component.props.description ??
@@ -2212,7 +2218,7 @@ function CanvasComponent({
           className="flex h-full w-full items-start border p-3 text-sm font-medium text-zinc-600"
           id={
             component.type === "section"
-              ? normalizeAnchor(component.content ?? component.id)
+              ? normalizeAnchor(richTextToPlainText(component.content ?? component.id))
               : undefined
           }
           style={{
@@ -2227,9 +2233,8 @@ function CanvasComponent({
               component.props.borderStyle ?? "dashed",
             ) as CSSProperties["borderStyle"],
           }}
-        >
-          {component.content}
-        </div>
+          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "") }}
+        />
       ) : (
         <div
           className="flex h-full w-full items-center justify-center bg-zinc-100 text-sm font-medium text-zinc-500"
@@ -2528,10 +2533,9 @@ function PropertyPanel({
                 : "삭제 잠금"}
             </button>
 
-            {selectedComponent.type === "text" ? (
+            {selectedComponent.type === "text" || selectedComponent.type === "textbox" ? (
               <div className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
-                텍스트 내용은 캔버스 안의 텍스트 박스를 직접 클릭해서
-                수정합니다.
+                텍스트 내용과 일부 선택 스타일은 캔버스 안에서 직접 수정합니다.
               </div>
             ) : null}
 
@@ -3001,6 +3005,7 @@ function PropertyPanel({
             {selectedComponent.type === "section" ||
             selectedComponent.type === "container" ||
             selectedComponent.type === "text" ||
+            selectedComponent.type === "textbox" ||
             selectedComponent.type === "image" ||
             selectedComponent.type === "video" ||
             selectedComponent.type === "icon" ||

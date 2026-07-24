@@ -102,12 +102,12 @@ export function getMobileComponentHeight(component: ResumeComponent) {
     return 72;
   }
 
-  if (component.type === "text") {
+  if (component.type === "text" || component.type === "textbox") {
     const contentLength = String(component.content ?? "").length;
     const estimatedLines = Math.max(3, Math.ceil(contentLength / 24));
     return Math.max(
       96,
-      Math.min(520, Math.max(component.height, estimatedLines * 24 + 32)),
+      Math.min(component.type === "textbox" ? 1200 : 520, Math.max(component.height, estimatedLines * 24 + 32)),
     );
   }
 

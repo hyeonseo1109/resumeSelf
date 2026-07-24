@@ -7,6 +7,7 @@ import {
   getImageMediaStyle,
   withAlpha,
 } from "./view-helpers";
+import { sanitizeRichTextHtml } from "@/lib/utils/rich-text";
 
 export function createPdfExportNode({
   project,
@@ -161,7 +162,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     );
   }
 
-  if (component.type === "text") {
+  if (component.type === "text" || component.type === "textbox") {
     frame.style.padding = "8px";
     frame.style.whiteSpace = "pre-wrap";
     frame.style.background = component.props.backgroundColor
@@ -170,7 +171,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
           Number(component.props.backgroundOpacity ?? 100),
         )
       : "transparent";
-    frame.textContent = component.content ?? "";
+    frame.innerHTML = sanitizeRichTextHtml(component.content ?? "");
     return frame;
   }
 
@@ -230,7 +231,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     title.style.padding = "12px 12px 4px";
     title.style.fontSize = `${Number(component.props.fontSize ?? 15)}px`;
     title.style.fontWeight = String(component.props.fontWeight ?? 700);
-    title.textContent = component.content ?? "Popup title";
+    title.innerHTML = sanitizeRichTextHtml(component.content ?? "Popup title");
     frame.appendChild(title);
 
     const description = document.createElement("div");
@@ -253,7 +254,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
       Number(component.props.backgroundOpacity ?? 100),
     );
     frame.style.textDecoration = "underline";
-    frame.textContent = component.content ?? "링크";
+    frame.innerHTML = sanitizeRichTextHtml(component.content ?? "링크");
     return frame;
   }
 
@@ -290,7 +291,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
       Number(component.props.backgroundOpacity ?? 100),
     );
     frame.style.padding = "12px";
-    frame.textContent = component.content ?? component.type;
+    frame.innerHTML = sanitizeRichTextHtml(component.content ?? component.type);
     return frame;
   }
 

@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { withAlpha } from "@/features/editor/view-helpers";
+import { sanitizeRichTextHtml } from "@/lib/utils/rich-text";
 import { getMobileComponentHeight } from "./layout";
 import { PublicComponent } from "./public-component";
 import type { MobileComponentNode } from "./types";
@@ -28,7 +29,10 @@ export function MobileComponentBlock({
         }}
       >
         {component.content ? (
-          <p className="text-sm font-semibold text-zinc-600">{component.content}</p>
+          <div
+            className="text-sm font-semibold text-zinc-600"
+            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content) }}
+          />
         ) : null}
         {children.map((child) => (
           <MobileComponentBlock

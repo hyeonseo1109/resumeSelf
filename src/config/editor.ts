@@ -24,6 +24,11 @@ export const iconOptions: IconOption[] = [
 
 export const insertableComponents: InsertableComponent[] = [
   { type: "text", label: "Text", description: "이력서 문장, 소개, 경력 설명" },
+  {
+    type: "textbox",
+    label: "Text Box",
+    description: "한 페이지를 채우는 긴 글 작성 영역",
+  },
   { type: "image", label: "Image", description: "프로필, 작업물, 인증 이미지" },
   {
     type: "video",

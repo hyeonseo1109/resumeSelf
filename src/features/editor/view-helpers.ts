@@ -122,7 +122,7 @@ export function getComponentLayer(component: ResumeComponent) {
 }
 
 export function hasTypography(component: ResumeComponent) {
-  return ["text", "button", "icon", "link", "section", "container", "popup"].includes(
+  return ["text", "textbox", "button", "icon", "link", "section", "container", "popup"].includes(
     component.type,
   );
 }

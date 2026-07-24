@@ -6,6 +6,7 @@ export type NavigationMode = "router" | "scroll";
 
 export type ComponentType =
   | "text"
+  | "textbox"
   | "image"
   | "video"
   | "button"
