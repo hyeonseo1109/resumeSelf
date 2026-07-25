@@ -2890,6 +2890,32 @@ function PropertyPanel({
                           ))}
                         </select>
                       </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <NumberField
+                          label="Line Height (%)"
+                          value={Number(selectedComponent.props.lineHeight ?? 150)}
+                          onChange={(value) =>
+                            onUpdate(selectedComponent.id, {
+                              props: {
+                                ...selectedComponent.props,
+                                lineHeight: clamp(value, 80, 300),
+                              },
+                            })
+                          }
+                        />
+                        <NumberField
+                          label="Letter Spacing (px)"
+                          value={Number(selectedComponent.props.letterSpacing ?? 0)}
+                          onChange={(value) =>
+                            onUpdate(selectedComponent.id, {
+                              props: {
+                                ...selectedComponent.props,
+                                letterSpacing: clamp(value, -5, 30),
+                              },
+                            })
+                          }
+                        />
+                      </div>
                     </>
                   ) : null}
                 </div>

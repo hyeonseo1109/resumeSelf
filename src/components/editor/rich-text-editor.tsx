@@ -42,6 +42,22 @@ const TextStyleAttributes = Extension.create({
                 ? { style: `font-weight: ${attributes.fontWeight}` }
                 : {},
           },
+          lineHeight: {
+            default: null,
+            parseHTML: (element) => element.style.lineHeight || null,
+            renderHTML: (attributes) =>
+              attributes.lineHeight
+                ? { style: `line-height: ${attributes.lineHeight}` }
+                : {},
+          },
+          letterSpacing: {
+            default: null,
+            parseHTML: (element) => element.style.letterSpacing || null,
+            renderHTML: (attributes) =>
+              attributes.letterSpacing
+                ? { style: `letter-spacing: ${attributes.letterSpacing}` }
+                : {},
+          },
         },
       },
     ];

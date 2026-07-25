@@ -155,6 +155,8 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   frame.style.fontFamily = String(
     component.props.fontFamily ?? FONT_OPTIONS[0].value,
   );
+  frame.style.lineHeight = `${Number(component.props.lineHeight ?? 150)}%`;
+  frame.style.letterSpacing = `${Number(component.props.letterSpacing ?? 0)}px`;
   if (component.type !== "divider" && component.props.backgroundColor) {
     frame.style.background = withAlpha(
       String(component.props.backgroundColor),

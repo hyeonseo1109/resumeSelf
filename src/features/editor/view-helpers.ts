@@ -64,6 +64,8 @@ export function getTextStyle(component: ResumeComponent): CSSProperties {
     fontSize: Number(component.props.fontSize ?? 16),
     fontWeight: Number(component.props.fontWeight ?? 400),
     fontFamily: String(component.props.fontFamily ?? FONT_OPTIONS[0].value),
+    lineHeight: `${Number(component.props.lineHeight ?? 150)}%`,
+    letterSpacing: `${Number(component.props.letterSpacing ?? 0)}px`,
   };
 }
 

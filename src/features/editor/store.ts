@@ -142,6 +142,8 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
               color: "#111827",
               fontSize: 18,
               fontWeight: 400,
+              lineHeight: 150,
+              letterSpacing: 0,
             }
         : type === "divider"
           ? {
