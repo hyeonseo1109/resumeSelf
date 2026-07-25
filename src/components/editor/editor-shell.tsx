@@ -2894,11 +2894,13 @@ function PropertyPanel({
                         <NumberField
                           label="Line Height (%)"
                           value={Number(selectedComponent.props.lineHeight ?? 150)}
+                          min={80}
+                          max={300}
                           onChange={(value) =>
                             onUpdate(selectedComponent.id, {
                               props: {
                                 ...selectedComponent.props,
-                                lineHeight: clamp(value, 80, 300),
+                                lineHeight: value,
                               },
                             })
                           }
@@ -2906,11 +2908,13 @@ function PropertyPanel({
                         <NumberField
                           label="Letter Spacing (px)"
                           value={Number(selectedComponent.props.letterSpacing ?? 0)}
+                          min={-5}
+                          max={30}
                           onChange={(value) =>
                             onUpdate(selectedComponent.id, {
                               props: {
                                 ...selectedComponent.props,
-                                letterSpacing: clamp(value, -5, 30),
+                                letterSpacing: value,
                               },
                             })
                           }
