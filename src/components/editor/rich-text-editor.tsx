@@ -4,7 +4,7 @@ import { Extension } from "@tiptap/core";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import { TextStyle } from "@tiptap/extension-text-style";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, type Editor, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import type {
   CSSProperties,
@@ -152,6 +152,72 @@ function getToolbarHeightValue(
   return baseLineHeight;
 }
 
+function getNodeFontSize(
+  node: {
+    marks?: ReadonlyArray<{
+      type: { name: string };
+      attrs: Record<string, unknown>;
+    }>;
+  },
+  baseFontSize: number,
+) {
+  const textStyleMark = node.marks?.find((mark) => mark.type.name === "textStyle");
+  return getNumericStyleValue(textStyleMark?.attrs.fontSize, baseFontSize);
+}
+
+function getSelectionFontScale({
+  editor,
+  nextFontSize,
+  baseFontSize,
+}: {
+  editor: Editor;
+  nextFontSize: number;
+  baseFontSize: number;
+}) {
+  const { from, to } = editor.state.selection;
+
+  if (from === to) {
+    return 1;
+  }
+
+  let previousMaxFontSize = 0;
+  let predictedMaxFontSize = 0;
+
+  editor.state.doc.nodesBetween(from, to, (node, position) => {
+    if (node.type.name !== "paragraph") {
+      return true;
+    }
+
+    const paragraphStart = position + 1;
+    node.descendants((child, offset) => {
+      if (!child.isText) {
+        return true;
+      }
+
+      const childFrom = paragraphStart + offset;
+      const childTo = childFrom + child.nodeSize;
+      const isOverlappingSelection = childFrom < to && childTo > from;
+      const currentFontSize = getNodeFontSize(child, baseFontSize);
+
+      previousMaxFontSize = Math.max(previousMaxFontSize, currentFontSize);
+      predictedMaxFontSize = Math.max(
+        predictedMaxFontSize,
+        isOverlappingSelection ? nextFontSize : currentFontSize,
+      );
+
+      return true;
+    });
+
+    return false;
+  });
+
+  if (previousMaxFontSize <= 0 || predictedMaxFontSize <= 0) {
+    return 1;
+  }
+
+  return predictedMaxFontSize / previousMaxFontSize;
+}
+
 export function RichTextEditor({
   value,
   readOnly,
@@ -168,6 +234,7 @@ export function RichTextEditor({
   onFocus?: () => void;
 }) {
   const baseLineHeight = getBaseLineHeightValue(baseStyle);
+  const baseFontSize = getNumericStyleValue(baseStyle.fontSize, 16);
   const [toolbarRevision, setToolbarRevision] = useState(0);
   const [toolbarActive, setToolbarActive] = useState(false);
   const [fontSizeDraft, setFontSizeDraft] = useState<string | null>(null);
@@ -307,11 +374,25 @@ export function RichTextEditor({
 
   function applyFontSizeInput(value: string) {
     const nextSize = Number.parseFloat(value);
-    if (!Number.isFinite(nextSize) || nextSize < 0 || nextSize > 200) {
+    if (!editor || !Number.isFinite(nextSize) || nextSize < 0 || nextSize > 200) {
       return;
     }
 
-    applyTextStyle({ fontSize: `${nextSize}px` });
+    const paragraphAttributes = editor.getAttributes("paragraph");
+    const currentHeight = getToolbarHeightValue(paragraphAttributes, baseLineHeight);
+    const fontScale = getSelectionFontScale({
+      editor,
+      nextFontSize: nextSize,
+      baseFontSize,
+    });
+    const nextHeight = Math.round(currentHeight * fontScale * 10) / 10;
+
+    editor.chain().focus().setMark("textStyle", { fontSize: `${nextSize}px` }).run();
+
+    if (fontScale !== 1) {
+      applyLineHeight(`${nextHeight - baseLineHeight}px`);
+      setLineHeightDraft(null);
+    }
   }
 
   function applyLineHeightInput(value: string) {

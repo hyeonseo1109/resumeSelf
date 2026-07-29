@@ -102,7 +102,7 @@ export function createPdfExportNode({
     }
 
     layout.components
-      .filter((component) => !component.props.popupId)
+      .filter((component) => !component.props.popupId && component.type !== "spacer")
       .sort((a, b) => getComponentLayer(a) - getComponentLayer(b))
       .forEach((component) => {
         canvas.appendChild(

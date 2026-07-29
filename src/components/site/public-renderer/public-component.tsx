@@ -23,6 +23,10 @@ export function PublicComponent({
   mobile?: boolean;
   onOpenPopup?: () => void;
 }) {
+  if (component.type === "spacer") {
+    return null;
+  }
+
   const mobileHeight = getMobileComponentHeight(component);
   const preserveRatioOnMobile = mobile && (component.type === "image" || component.type === "video");
   const borderRadius = Number(component.props.borderRadius ?? 6);

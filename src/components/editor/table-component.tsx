@@ -1,15 +1,19 @@
 "use client";
 
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { useState } from "react";
 import {
   getSelectedTableCell,
+  getTableColWidths,
   getTableCols,
   getTableGridStyle,
+  getTableRowHeights,
   getTableRows,
   insertTableCol,
   insertTableRow,
   parseTableData,
   serializeTableData,
+  serializeTableSizes,
   updateTableCellText,
 } from "@/features/editor/table";
 import { cn } from "@/lib/utils/cn";
@@ -20,11 +24,15 @@ export function TableComponent({
   preview,
   onSelect,
   onUpdate,
+  onResizeStart,
+  interactionScale = 1,
 }: {
   component: ResumeComponent;
   preview: boolean;
   onSelect: () => void;
   onUpdate: (patch: Partial<ResumeComponent>) => void;
+  onResizeStart?: () => void;
+  interactionScale?: number;
 }) {
   const [menu, setMenu] = useState<{
     x: number;
@@ -36,6 +44,8 @@ export function TableComponent({
   const rows = getTableRows(component);
   const cols = getTableCols(component);
   const selectedCell = getSelectedTableCell(component);
+  const rowHeights = getTableRowHeights(component);
+  const colWidths = getTableColWidths(component);
 
   function selectCell(row: number, col: number) {
     onSelect();
@@ -65,6 +75,11 @@ export function TableComponent({
       props: {
         ...component.props,
         tableRows: rows + 1,
+        tableRowHeights: serializeTableSizes([
+          ...rowHeights.slice(0, index),
+          Math.max(42, component.height / Math.max(1, rows + 1)),
+          ...rowHeights.slice(index),
+        ]),
         tableData: serializeTableData(nextData),
         selectedCellRow: index,
         selectedCellCol: Math.min(selectedCell.col, cols - 1),
@@ -79,12 +94,77 @@ export function TableComponent({
       props: {
         ...component.props,
         tableCols: cols + 1,
+        tableColWidths: serializeTableSizes([
+          ...colWidths.slice(0, index),
+          Math.max(72, component.width / Math.max(1, cols + 1)),
+          ...colWidths.slice(index),
+        ]),
         tableData: serializeTableData(nextData),
         selectedCellRow: Math.min(selectedCell.row, rows - 1),
         selectedCellCol: index,
       },
     });
     setMenu(null);
+  }
+
+  function resizeRow(index: number, deltaY: number) {
+    const nextHeights = rowHeights.map((height, rowIndex) =>
+      rowIndex === index ? Math.max(24, height + deltaY) : height,
+    );
+    const nextHeight = nextHeights.reduce((total, height) => total + height, 0);
+
+    onUpdate({
+      height: nextHeight,
+      props: {
+        ...component.props,
+        tableRowHeights: serializeTableSizes(nextHeights),
+      },
+    });
+  }
+
+  function resizeCol(index: number, deltaX: number) {
+    const nextWidths = colWidths.map((width, colIndex) =>
+      colIndex === index ? Math.max(32, width + deltaX) : width,
+    );
+    const nextWidth = nextWidths.reduce((total, width) => total + width, 0);
+
+    onUpdate({
+      width: nextWidth,
+      props: {
+        ...component.props,
+        tableColWidths: serializeTableSizes(nextWidths),
+      },
+    });
+  }
+
+  function startTableResize(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    axis: "row" | "col",
+    index: number,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    onResizeStart?.();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+
+    function handlePointerMove(pointerEvent: PointerEvent) {
+      if (axis === "row") {
+        resizeRow(index, (pointerEvent.clientY - startY) / interactionScale);
+        return;
+      }
+
+      resizeCol(index, (pointerEvent.clientX - startX) / interactionScale);
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
   }
 
   return (
@@ -162,6 +242,40 @@ export function TableComponent({
           );
         }),
       )}
+      {!preview
+        ? colWidths.slice(0, -1).map((_, colIndex) => (
+            <button
+              key={`col-resize-${colIndex}`}
+              type="button"
+              data-editor-control="true"
+              aria-label="열 너비 조절"
+              className="absolute top-0 z-40 h-full w-2 -translate-x-1 cursor-col-resize bg-transparent hover:bg-emerald-400/30"
+              style={{
+                left: colWidths
+                  .slice(0, colIndex + 1)
+                  .reduce((total, width) => total + width, 0),
+              }}
+              onPointerDown={(event) => startTableResize(event, "col", colIndex)}
+            />
+          ))
+        : null}
+      {!preview
+        ? rowHeights.slice(0, -1).map((_, rowIndex) => (
+            <button
+              key={`row-resize-${rowIndex}`}
+              type="button"
+              data-editor-control="true"
+              aria-label="행 높이 조절"
+              className="absolute left-0 z-40 h-2 w-full -translate-y-1 cursor-row-resize bg-transparent hover:bg-emerald-400/30"
+              style={{
+                top: rowHeights
+                  .slice(0, rowIndex + 1)
+                  .reduce((total, height) => total + height, 0),
+              }}
+              onPointerDown={(event) => startTableResize(event, "row", rowIndex)}
+            />
+          ))
+        : null}
       {menu && !preview ? (
         <div
           data-editor-control="true"

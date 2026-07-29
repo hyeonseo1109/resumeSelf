@@ -82,13 +82,29 @@ import {
   richTextToPlainText,
   sanitizeRichTextHtml,
 } from "@/lib/utils/rich-text";
-import type { ComponentPreset, ResumeComponent, ResumeProject } from "@/types/project";
+import type {
+  ComponentPreset,
+  ComponentType,
+  ResumeComponent,
+  ResumeProject,
+} from "@/types/project";
 
 interface EditorShellProps {
   project: ResumeProject;
 }
 
 const SCROLL_CANVAS_HEADER_HEIGHT = 64;
+const MIN_INSERT_SIZE = { width: 48, height: 36 };
+
+type ResizeDirection =
+  | "top"
+  | "right"
+  | "bottom"
+  | "left"
+  | "topLeft"
+  | "topRight"
+  | "bottomLeft"
+  | "bottomRight";
 
 function isEditorInteractiveTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
@@ -191,6 +207,13 @@ export function EditorShell({ project }: EditorShellProps) {
     currentX: number;
     currentY: number;
   } | null>(null);
+  const [pendingInsertType, setPendingInsertType] = useState<ComponentType | null>(null);
+  const [insertDraft, setInsertDraft] = useState<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  } | null>(null);
   const sensors = useSensors(
     useSensor(EditorPointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -264,6 +287,7 @@ export function EditorShell({ project }: EditorShellProps) {
         }))
   )
     .filter(({ component }) => !component.props.popupId)
+    .filter(({ component }) => mode === "edit" || component.type !== "spacer")
     .sort(
       (a, b) => getComponentLayer(a.component) - getComponentLayer(b.component),
     );
@@ -759,13 +783,22 @@ export function EditorShell({ project }: EditorShellProps) {
     };
   }
 
-  function getLassoRect(selection: NonNullable<typeof lasso>) {
+  function getDragRect(selection: {
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  }) {
     return {
       left: Math.min(selection.startX, selection.currentX),
       top: Math.min(selection.startY, selection.currentY),
       right: Math.max(selection.startX, selection.currentX),
       bottom: Math.max(selection.startY, selection.currentY),
     };
+  }
+
+  function getLassoRect(selection: NonNullable<typeof lasso>) {
+    return getDragRect(selection);
   }
 
   function rectsIntersect(
@@ -804,6 +837,64 @@ export function EditorShell({ project }: EditorShellProps) {
   }
 
   function handleCanvasPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (
+      mode === "edit" &&
+      pendingInsertType &&
+      event.button === 0 &&
+      !(event.target as HTMLElement).closest(
+        "[data-component-id], [data-editor-control], button, a, input, textarea, select",
+      )
+    ) {
+      event.preventDefault();
+      const insertType = pendingInsertType;
+      const start = getCanvasPoint(event);
+      setSelectedComponentIds([]);
+      selectComponent(null);
+      setInsertDraft({
+        startX: start.x,
+        startY: start.y,
+        currentX: start.x,
+        currentY: start.y,
+      });
+
+      function handlePointerMove(pointerEvent: PointerEvent) {
+        const point = getCanvasPoint(pointerEvent);
+        setInsertDraft((current) =>
+          current
+            ? { ...current, currentX: point.x, currentY: point.y }
+            : current,
+        );
+      }
+
+      function handlePointerUp(pointerEvent: PointerEvent) {
+        const point = getCanvasPoint(pointerEvent);
+        const rect = getDragRect({
+          startX: start.x,
+          startY: start.y,
+          currentX: point.x,
+          currentY: point.y,
+        });
+        const width = Math.max(MIN_INSERT_SIZE.width, rect.right - rect.left);
+        const height = Math.max(MIN_INSERT_SIZE.height, rect.bottom - rect.top);
+
+        recordHistory();
+        addComponentAt(insertType, {
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width: Math.round(width),
+          height: Math.round(height),
+        });
+        setPendingInsertType(null);
+        setInsertDraft(null);
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", handlePointerUp);
+      }
+
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", handlePointerUp);
+      return;
+    }
+
     if (
       mode !== "edit" ||
       event.button !== 0 ||
@@ -1209,16 +1300,38 @@ export function EditorShell({ project }: EditorShellProps) {
 
   function resizeComponent(
     component: ResumeComponent,
-    deltaWidth: number,
-    deltaHeight: number,
+    deltaX: number,
+    deltaY: number,
+    direction: ResizeDirection = "bottomRight",
   ) {
     const scale = getInteractionScale(component);
-    const nextWidth = Math.max(48, component.width + deltaWidth / scale);
-    const nextHeight = Math.max(36, component.height + deltaHeight / scale);
+    const scaledDeltaX = deltaX / scale;
+    const scaledDeltaY = deltaY / scale;
+    let nextX = component.x;
+    let nextY = component.y;
+    let nextWidth = component.width;
+    let nextHeight = component.height;
+    const normalizedDirection = direction.toLowerCase();
+
+    if (normalizedDirection.includes("right")) {
+      nextWidth = Math.max(48, component.width + scaledDeltaX);
+    }
+    if (normalizedDirection.includes("left")) {
+      nextWidth = Math.max(48, component.width - scaledDeltaX);
+      nextX = component.x + (component.width - nextWidth);
+    }
+    if (normalizedDirection.includes("bottom")) {
+      nextHeight = Math.max(36, component.height + scaledDeltaY);
+    }
+    if (normalizedDirection.includes("top")) {
+      nextHeight = Math.max(36, component.height - scaledDeltaY);
+      nextY = component.y + (component.height - nextHeight);
+    }
+
     const snap = getSmartSnap(
       component,
-      component.x,
-      component.y,
+      nextX,
+      nextY,
       nextWidth,
       nextHeight,
     );
@@ -1226,14 +1339,16 @@ export function EditorShell({ project }: EditorShellProps) {
     setSpacingGuides(
       getSpacingGuides(
         component,
-        component.x,
-        component.y,
+        snap.x,
+        snap.y,
         snap.width,
         snap.height,
       ),
     );
     setGuidePopupId(typeof component.props.popupId === "string" ? component.props.popupId : null);
     updateComponent(component.id, {
+      x: snap.x,
+      y: snap.y,
       width: snap.width,
       height: snap.height,
     });
@@ -1242,34 +1357,6 @@ export function EditorShell({ project }: EditorShellProps) {
       setSpacingGuides([]);
       setGuidePopupId(null);
     }, 450);
-  }
-
-  function addComponentToVisibleCenter(
-    type: Parameters<typeof addComponentAt>[0],
-  ) {
-    const size =
-      type === "divider"
-        ? { width: 520, height: 140 }
-        : type === "section"
-          ? { width: 620, height: 320 }
-          : type === "container"
-            ? { width: 620, height: 220 }
-            : type === "popup"
-              ? { width: 320, height: 220 }
-              : type === "table"
-                ? { width: 480, height: 220 }
-              : type === "textbox"
-                ? { width: 760, height: 860 }
-              : type === "text"
-                ? { width: 360, height: 96 }
-                : { width: 360, height: 140 };
-    const canvas = document.getElementById("resume-canvas");
-    const canvasTop = canvas?.getBoundingClientRect().top ?? 0;
-    const visibleCenter = (window.innerHeight / 2 - canvasTop) / canvasScale;
-    const x = Math.max(24, Math.round(420 - size.width / 2));
-    const y = Math.max(88, Math.round(visibleCenter - size.height / 2));
-
-    addComponentAt(type, { x, y });
   }
 
   function addIconToVisibleCenter(icon: (typeof iconOptions)[number]) {
@@ -1739,14 +1826,25 @@ export function EditorShell({ project }: EditorShellProps) {
                 <button
                   key={item.type}
                   type="button"
-                  onClick={() => addComponentToVisibleCenter(item.type)}
-                  className="rounded-md border border-zinc-200 p-3 text-left transition hover:border-zinc-400 hover:bg-zinc-50"
+                  onClick={() =>
+                    setPendingInsertType((current) =>
+                      current === item.type ? null : item.type,
+                    )
+                  }
+                  className={cn(
+                    "rounded-md border p-3 text-left transition hover:border-zinc-400 hover:bg-zinc-50",
+                    pendingInsertType === item.type
+                      ? "border-emerald-500 bg-emerald-50"
+                      : "border-zinc-200",
+                  )}
                 >
                   <span className="block text-sm font-medium">
                     {item.label}
                   </span>
                   <span className="mt-1 block text-xs leading-5 text-zinc-500">
-                    {item.description}
+                    {pendingInsertType === item.type
+                      ? "캔버스에서 드래그해 크기와 위치를 정하세요."
+                      : item.description}
                   </span>
                 </button>
               ))}
@@ -1817,7 +1915,10 @@ export function EditorShell({ project }: EditorShellProps) {
             >
               <div
                 id="resume-canvas"
-                className="relative w-[840px] origin-top-left bg-white shadow-sm ring-1 ring-zinc-200"
+                className={cn(
+                  "relative w-[840px] origin-top-left bg-white shadow-sm ring-1 ring-zinc-200",
+                  pendingInsertType && mode === "edit" && "cursor-crosshair",
+                )}
                 onPointerDown={handleCanvasPointerDown}
                 style={{
                   minHeight: canvasHeight,
@@ -1891,8 +1992,8 @@ export function EditorShell({ project }: EditorShellProps) {
                       removeComponents(getPopupRelatedIds([component.id]));
                       setSelectedComponentIds((ids) => ids.filter((id) => id !== component.id));
                     }}
-                    onResize={(deltaWidth, deltaHeight) =>
-                      resizeComponent(component, deltaWidth, deltaHeight)
+                    onResize={(deltaX, deltaY, direction) =>
+                      resizeComponent(component, deltaX, deltaY, direction)
                     }
                     onResizeStart={recordHistory}
                     onInlineTextChange={(content) =>
@@ -1907,6 +2008,7 @@ export function EditorShell({ project }: EditorShellProps) {
                   <GuideOverlay guideLines={guideLines} spacingGuides={spacingGuides} />
                 ) : null}
                 {lasso ? <LassoOverlay lasso={lasso} /> : null}
+                {insertDraft ? <InsertDraftOverlay draft={insertDraft} /> : null}
               </div>
               {popupComponent ? (
                 <PopupOverlay
@@ -2376,6 +2478,29 @@ function LassoOverlay({
   );
 }
 
+function InsertDraftOverlay({
+  draft,
+}: {
+  draft: {
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+  };
+}) {
+  const left = Math.min(draft.startX, draft.currentX);
+  const top = Math.min(draft.startY, draft.currentY);
+  const width = Math.abs(draft.currentX - draft.startX);
+  const height = Math.abs(draft.currentY - draft.startY);
+
+  return (
+    <div
+      className="pointer-events-none absolute z-[96] border border-emerald-500 bg-emerald-400/10"
+      style={{ left, top, width, height }}
+    />
+  );
+}
+
 function CanvasComponent({
   component,
   displayTop,
@@ -2400,7 +2525,11 @@ function CanvasComponent({
   isCropEditing: boolean;
   onSelect: (event?: ReactMouseEvent<HTMLDivElement>) => void;
   onDelete: () => void;
-  onResize: (deltaWidth: number, deltaHeight: number) => void;
+  onResize: (
+    deltaX: number,
+    deltaY: number,
+    direction?: ResizeDirection,
+  ) => void;
   onResizeStart: () => void;
   onInlineTextChange: (content: string) => void;
   onOpenPopup: () => void;
@@ -2462,7 +2591,10 @@ function CanvasComponent({
       component.type === "image" || component.type === "video" ? 1 : undefined,
     borderRadius,
   };
-  function handleResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
+  function handleResizeStart(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    direction: ResizeDirection,
+  ) {
     event.preventDefault();
     event.stopPropagation();
     onResizeStart();
@@ -2471,7 +2603,11 @@ function CanvasComponent({
     const startY = event.clientY;
 
     function handlePointerMove(pointerEvent: PointerEvent) {
-      onResize(pointerEvent.clientX - startX, pointerEvent.clientY - startY);
+      onResize(
+        pointerEvent.clientX - startX,
+        pointerEvent.clientY - startY,
+        direction,
+      );
     }
 
     function handlePointerUp() {
@@ -2637,6 +2773,8 @@ function CanvasComponent({
           preview={preview}
           onSelect={() => onSelect()}
           onUpdate={onUpdate}
+          onResizeStart={onResizeStart}
+          interactionScale={interactionScale}
         />
       ) : component.type === "image" && component.content ? (
         <div
@@ -2914,13 +3052,64 @@ function CanvasComponent({
         </div>
       )}
       {!preview && isSelected ? (
-        <button
-          type="button"
-          data-editor-control="true"
-          onPointerDown={handleResizeStart}
-          className="absolute bottom-1 right-1 z-20 size-4 rounded-sm border border-zinc-300 bg-white shadow-sm cursor-nwse-resize"
-          aria-label="Resize component"
-        />
+        <>
+          {[
+            {
+              direction: "top" as const,
+              className:
+                "left-3 right-3 top-0 h-2 -translate-y-1 cursor-ns-resize",
+            },
+            {
+              direction: "right" as const,
+              className:
+                "bottom-3 right-0 top-3 w-2 translate-x-1 cursor-ew-resize",
+            },
+            {
+              direction: "bottom" as const,
+              className:
+                "bottom-0 left-3 right-3 h-2 translate-y-1 cursor-ns-resize",
+            },
+            {
+              direction: "left" as const,
+              className:
+                "bottom-3 left-0 top-3 w-2 -translate-x-1 cursor-ew-resize",
+            },
+            {
+              direction: "topLeft" as const,
+              className:
+                "left-0 top-0 size-3 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize rounded-full border border-emerald-500 bg-white",
+            },
+            {
+              direction: "topRight" as const,
+              className:
+                "right-0 top-0 size-3 -translate-y-1/2 translate-x-1/2 cursor-nesw-resize rounded-full border border-emerald-500 bg-white",
+            },
+            {
+              direction: "bottomLeft" as const,
+              className:
+                "bottom-0 left-0 size-3 -translate-x-1/2 translate-y-1/2 cursor-nesw-resize rounded-full border border-emerald-500 bg-white",
+            },
+            {
+              direction: "bottomRight" as const,
+              className:
+                "bottom-0 right-0 size-3 translate-x-1/2 translate-y-1/2 cursor-nwse-resize rounded-full border border-emerald-500 bg-white",
+            },
+          ].map((handle) => (
+            <button
+              key={handle.direction}
+              type="button"
+              data-editor-control="true"
+              onPointerDown={(event) =>
+                handleResizeStart(event, handle.direction)
+              }
+              className={cn(
+                "absolute z-30 bg-emerald-400/0 hover:bg-emerald-400/30",
+                handle.className,
+              )}
+              aria-label="Resize component"
+            />
+          ))}
+        </>
       ) : null}
     </div>
   );
@@ -2949,8 +3138,9 @@ function PopupOverlay({
   onDelete: (id: string) => void;
   onResize: (
     component: ResumeComponent,
-    deltaWidth: number,
-    deltaHeight: number,
+    deltaX: number,
+    deltaY: number,
+    direction?: ResizeDirection,
   ) => void;
   onInlineTextChange: (id: string, content: string) => void;
   onUpdateComponent: (id: string, patch: Partial<ResumeComponent>) => void;
@@ -3036,8 +3226,8 @@ function PopupOverlay({
                 }
                 onDelete(component.id);
               }}
-              onResize={(deltaWidth, deltaHeight) =>
-                onResize(component, deltaWidth, deltaHeight)
+              onResize={(deltaX, deltaY, direction) =>
+                onResize(component, deltaX, deltaY, direction)
               }
               onResizeStart={() => undefined}
               onInlineTextChange={(content) =>

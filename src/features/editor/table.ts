@@ -67,6 +67,44 @@ export function getSelectedTableCell(component: ResumeComponent) {
   };
 }
 
+function parseSizeList(value: unknown, count: number, total: number) {
+  try {
+    const parsed = JSON.parse(String(value ?? "[]"));
+    if (!Array.isArray(parsed)) {
+      throw new Error("Invalid size list");
+    }
+
+    const fallback = Math.max(24, total / Math.max(1, count));
+    return Array.from({ length: count }, (_, index) => {
+      const size = Number(parsed[index]);
+      return Number.isFinite(size) && size > 0 ? size : fallback;
+    });
+  } catch {
+    const fallback = Math.max(24, total / Math.max(1, count));
+    return Array.from({ length: count }, () => fallback);
+  }
+}
+
+export function serializeTableSizes(sizes: number[]) {
+  return JSON.stringify(sizes.map((size) => Math.max(12, Math.round(size))));
+}
+
+export function getTableRowHeights(component: ResumeComponent) {
+  return parseSizeList(
+    component.props.tableRowHeights,
+    getTableRows(component),
+    component.height,
+  );
+}
+
+export function getTableColWidths(component: ResumeComponent) {
+  return parseSizeList(
+    component.props.tableColWidths,
+    getTableCols(component),
+    component.width,
+  );
+}
+
 export function resizeTableData(data: TableData, rows: number, cols: number) {
   return Array.from({ length: rows }, (_, rowIndex) =>
     Array.from({ length: cols }, (_, colIndex) => ({
@@ -135,8 +173,12 @@ export function updateTableCellBackground(
 export function getTableGridStyle(component: ResumeComponent): CSSProperties {
   return {
     display: "grid",
-    gridTemplateColumns: `repeat(${getTableCols(component)}, minmax(0, 1fr))`,
-    gridAutoRows: "minmax(42px, 1fr)",
+    gridTemplateColumns: getTableColWidths(component)
+      .map((width) => `${Math.max(24, width)}px`)
+      .join(" "),
+    gridTemplateRows: getTableRowHeights(component)
+      .map((height) => `${Math.max(24, height)}px`)
+      .join(" "),
     width: "100%",
     height: "100%",
     borderRadius: Number(component.props.borderRadius ?? 6),

@@ -4,6 +4,8 @@ import { create } from "zustand";
 import { createDefaultTableData, serializeTableData } from "@/features/editor/table";
 import type { ComponentType, ResumeComponent, ResumeProject, SaveStatus } from "@/types/project";
 
+type ComponentInsertRect = { x: number; y: number; width?: number; height?: number };
+
 function normalizeSlug(value: string) {
   return value
     .trim()
@@ -53,7 +55,7 @@ interface EditorState {
   selectComponent: (id: string | null) => void;
   setOpenPopup: (id: string | null) => void;
   addComponent: (type: ComponentType) => void;
-  addComponentAt: (type: ComponentType, position: { x: number; y: number }) => void;
+  addComponentAt: (type: ComponentType, position: ComponentInsertRect) => void;
   updateComponent: (id: string, patch: Partial<ResumeComponent>) => void;
   addComponents: (components: ResumeComponent[]) => void;
   removeComponents: (ids: string[]) => void;
@@ -109,15 +111,15 @@ function getComponentSize(type: ComponentType) {
   };
 }
 
-function buildComponent(type: ComponentType, position: { x: number; y: number }, popupId?: string | null): ResumeComponent {
+function buildComponent(type: ComponentType, position: ComponentInsertRect, popupId?: string | null): ResumeComponent {
   const size = getComponentSize(type);
   const component: ResumeComponent = {
     id: crypto.randomUUID(),
     type,
     x: popupId && type !== "popup" ? 40 : position.x,
     y: popupId && type !== "popup" ? 96 : position.y,
-    width: size.width,
-    height: size.height,
+    width: Math.max(24, position.width ?? size.width),
+    height: Math.max(20, position.height ?? size.height),
     content:
       type === "text"
         ? "새 텍스트를 입력하세요"
@@ -217,7 +219,7 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
 function addComponentToState(
   state: EditorState,
   type: ComponentType,
-  position: { x: number; y: number } = { x: 96, y: 120 },
+  position: ComponentInsertRect = { x: 96, y: 120 },
 ): Partial<EditorState> {
   if (state.project.navigationMode === "scroll" && type === "section") {
     const label = getNextPageLabel(state.project.navigation.map((item) => item.label));
