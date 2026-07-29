@@ -36,6 +36,10 @@ export function PublicComponent({
   const preserveRatioOnMobile = mobile && (component.type === "image" || component.type === "video");
   const borderRadius = Number(component.props.borderRadius ?? 6);
   const textStyle = getTextStyle(component);
+  const richTextCssVariables = {
+    "--resume-line-height": `${Number(component.props.lineHeight ?? 150)}%`,
+    "--resume-letter-spacing": `${Number(component.props.letterSpacing ?? 0)}px`,
+  } as CSSProperties;
 
   return (
     <div
@@ -59,9 +63,10 @@ export function PublicComponent({
     >
       {component.type === "text" || component.type === "textbox" ? (
         <div
-          className="h-full w-full overflow-hidden whitespace-pre-wrap break-words p-2"
+          className="resume-public-rich-text h-full w-full overflow-hidden whitespace-pre-wrap break-words p-2"
           style={{
             ...textStyle,
+            ...richTextCssVariables,
             borderRadius,
             backgroundColor: component.props.backgroundColor
               ? withAlpha(String(component.props.backgroundColor), Number(component.props.backgroundOpacity ?? 100))
@@ -175,8 +180,9 @@ export function PublicComponent({
           }}
         >
           <span
-            className="resume-link-content"
+            className="resume-link-content resume-public-rich-text"
             style={{
+              ...richTextCssVariables,
               overflowWrap: "anywhere",
               wordBreak: "break-word",
             }}

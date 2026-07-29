@@ -122,3 +122,17 @@ select {
 .resume-link-content p {
   margin: 0;
 }
+
+.resume-public-rich-text,
+.resume-public-rich-text * {
+  line-height: var(--resume-line-height, inherit);
+  letter-spacing: var(--resume-letter-spacing, inherit);
+}
+
+.resume-public-rich-text p {
+  margin-bottom: 0.75em;
+}
+
+.resume-public-rich-text p:last-child {
+  margin-bottom: 0;
+}

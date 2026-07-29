@@ -42,6 +42,18 @@ function applyLinkWrapping(element: HTMLElement) {
   });
 }
 
+function applyRichTextSpacing(element: HTMLElement, component: ResumeComponent) {
+  const lineHeight = `${Number(component.props.lineHeight ?? 150)}%`;
+  const letterSpacing = `${Number(component.props.letterSpacing ?? 0)}px`;
+
+  element.style.lineHeight = lineHeight;
+  element.style.letterSpacing = letterSpacing;
+  element.querySelectorAll<HTMLElement>("*").forEach((child) => {
+    child.style.lineHeight = lineHeight;
+    child.style.letterSpacing = letterSpacing;
+  });
+}
+
 export function createPdfExportNode({
   project,
   activePage,
@@ -211,6 +223,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
         )
       : "transparent";
     frame.innerHTML = sanitizeRichTextHtml(component.content ?? "");
+    applyRichTextSpacing(frame, component);
     return frame;
   }
 
@@ -368,6 +381,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     label.style.wordBreak = "break-word";
     label.innerHTML = sanitizeLinkLabelHtml(component.content ?? "링크");
     applyLinkWrapping(label);
+    applyRichTextSpacing(label, component);
     frame.appendChild(label);
     return frame;
   }
