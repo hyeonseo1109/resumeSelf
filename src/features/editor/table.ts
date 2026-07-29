@@ -5,6 +5,13 @@ export type TableCell = {
   text: string;
   backgroundColor?: string;
   textAlign?: "left" | "center" | "right";
+  verticalAlign?: "top" | "middle" | "bottom";
+  color?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  lineHeight?: number;
+  letterSpacing?: number;
 };
 
 export type TableData = TableCell[][];
@@ -43,6 +50,36 @@ export function parseTableData(component: ResumeComponent): TableData {
                       (cell as TableCell).textAlign === "right" ||
                       (cell as TableCell).textAlign === "left"
                         ? (cell as TableCell).textAlign
+                        : undefined,
+                    verticalAlign:
+                      (cell as TableCell).verticalAlign === "middle" ||
+                      (cell as TableCell).verticalAlign === "bottom" ||
+                      (cell as TableCell).verticalAlign === "top"
+                        ? (cell as TableCell).verticalAlign
+                        : undefined,
+                    color:
+                      typeof (cell as TableCell).color === "string"
+                        ? (cell as TableCell).color
+                        : undefined,
+                    fontFamily:
+                      typeof (cell as TableCell).fontFamily === "string"
+                        ? (cell as TableCell).fontFamily
+                        : undefined,
+                    fontSize:
+                      Number.isFinite(Number((cell as TableCell).fontSize))
+                        ? Number((cell as TableCell).fontSize)
+                        : undefined,
+                    fontWeight:
+                      Number.isFinite(Number((cell as TableCell).fontWeight))
+                        ? Number((cell as TableCell).fontWeight)
+                        : undefined,
+                    lineHeight:
+                      Number.isFinite(Number((cell as TableCell).lineHeight))
+                        ? Number((cell as TableCell).lineHeight)
+                        : undefined,
+                    letterSpacing:
+                      Number.isFinite(Number((cell as TableCell).letterSpacing))
+                        ? Number((cell as TableCell).letterSpacing)
                         : undefined,
                   }
                 : { text: String(cell ?? "") },
@@ -147,6 +184,13 @@ export function resizeTableData(data: TableData, rows: number, cols: number) {
       text: data[rowIndex]?.[colIndex]?.text ?? "",
       backgroundColor: data[rowIndex]?.[colIndex]?.backgroundColor,
       textAlign: data[rowIndex]?.[colIndex]?.textAlign,
+      verticalAlign: data[rowIndex]?.[colIndex]?.verticalAlign,
+      color: data[rowIndex]?.[colIndex]?.color,
+      fontFamily: data[rowIndex]?.[colIndex]?.fontFamily,
+      fontSize: data[rowIndex]?.[colIndex]?.fontSize,
+      fontWeight: data[rowIndex]?.[colIndex]?.fontWeight,
+      lineHeight: data[rowIndex]?.[colIndex]?.lineHeight,
+      letterSpacing: data[rowIndex]?.[colIndex]?.letterSpacing,
     })),
   );
 }
@@ -307,13 +351,21 @@ export function updateTableCellRangeTextAlign(
   range: ReturnType<typeof getSelectedTableRange>,
   textAlign: "left" | "center" | "right",
 ) {
+  return updateTableCellRangeStyle(data, range, { textAlign });
+}
+
+export function updateTableCellRangeStyle(
+  data: TableData,
+  range: ReturnType<typeof getSelectedTableRange>,
+  style: Partial<Omit<TableCell, "text">>,
+) {
   return data.map((items, rowIndex) =>
     items.map((cell, colIndex) =>
       rowIndex >= range.startRow &&
       rowIndex <= range.endRow &&
       colIndex >= range.startCol &&
       colIndex <= range.endCol
-        ? { ...cell, textAlign }
+        ? { ...cell, ...style }
         : cell,
     ),
   );

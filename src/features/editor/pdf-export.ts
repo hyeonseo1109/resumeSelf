@@ -225,13 +225,36 @@ function createPdfComponent(component: ResumeComponent, top: number) {
         cellNode.style.background =
           cell.backgroundColor ??
           String(component.props.cellBackgroundColor ?? "#ffffff");
-        cellNode.style.color = String(component.props.color ?? "#111827");
-        cellNode.style.fontFamily = String(component.props.fontFamily ?? FONT_OPTIONS[0].value);
-        cellNode.style.fontSize = `${Number(component.props.fontSize ?? 14)}px`;
-        cellNode.style.fontWeight = String(component.props.fontWeight ?? 400);
-        cellNode.style.lineHeight = `${Number(component.props.lineHeight ?? 150)}%`;
-        cellNode.style.letterSpacing = `${Number(component.props.letterSpacing ?? 0)}px`;
+        cellNode.style.color = String(cell.color ?? component.props.color ?? "#111827");
+        cellNode.style.fontFamily = String(
+          cell.fontFamily ?? component.props.fontFamily ?? FONT_OPTIONS[0].value,
+        );
+        cellNode.style.fontSize = `${Number(
+          cell.fontSize ?? component.props.fontSize ?? 14,
+        )}px`;
+        cellNode.style.fontWeight = String(
+          cell.fontWeight ?? component.props.fontWeight ?? 400,
+        );
+        cellNode.style.lineHeight = `${Number(
+          cell.lineHeight ?? component.props.lineHeight ?? 150,
+        )}%`;
+        cellNode.style.letterSpacing = `${Number(
+          cell.letterSpacing ?? component.props.letterSpacing ?? 0,
+        )}px`;
         cellNode.style.textAlign = cell.textAlign ?? "left";
+        cellNode.style.display = "flex";
+        cellNode.style.alignItems =
+          cell.verticalAlign === "middle"
+            ? "center"
+            : cell.verticalAlign === "bottom"
+              ? "flex-end"
+              : "flex-start";
+        cellNode.style.justifyContent =
+          cell.textAlign === "center"
+            ? "center"
+            : cell.textAlign === "right"
+              ? "flex-end"
+              : "flex-start";
         cellNode.textContent = cell.text;
         frame.appendChild(cellNode);
       });

@@ -52,7 +52,6 @@ import {
 } from "@/features/editor/spacer-layout";
 import { createEditorStore } from "@/features/editor/store";
 import {
-  getSelectedTableCell,
   getSelectedTableRange,
   getTableCols,
   getTableRows,
@@ -60,8 +59,9 @@ import {
   parseTableData,
   resizeTableData,
   serializeTableData,
-  updateTableCellBackground,
   updateTableCellRangeTextAlign,
+  updateTableCellRangeStyle,
+  type TableCell,
 } from "@/features/editor/table";
 import {
   FONT_OPTIONS,
@@ -3458,14 +3458,19 @@ function PropertyPanel({
     });
   }
 
-  function updateSelectedTableCellBackground(component: ResumeComponent, color: string) {
-    const { row, col } = getSelectedTableCell(component);
+  function updateSelectedTableRangeStyle(
+    component: ResumeComponent,
+    style: Partial<Omit<TableCell, "text">>,
+  ) {
     const data = parseTableData(component);
+    const range = getSelectedTableRange(component);
 
     onUpdate(component.id, {
       props: {
         ...component.props,
-        tableData: serializeTableData(updateTableCellBackground(data, row, col, color)),
+        tableData: serializeTableData(
+          updateTableCellRangeStyle(data, range, style),
+        ),
       },
     });
   }
@@ -3486,6 +3491,30 @@ function PropertyPanel({
       },
     });
   }
+
+  function updateSelectedTableRangeVerticalAlign(
+    component: ResumeComponent,
+    verticalAlign: "top" | "middle" | "bottom",
+  ) {
+    updateSelectedTableRangeStyle(component, { verticalAlign });
+  }
+
+  const selectedTableRange =
+    selectedComponent?.type === "table"
+      ? getSelectedTableRange(selectedComponent)
+      : null;
+  const selectedTableCellData =
+    selectedComponent?.type === "table" && selectedTableRange
+      ? parseTableData(selectedComponent)[selectedTableRange.startRow]?.[
+          selectedTableRange.startCol
+        ]
+      : null;
+  const selectedTableRangeLabel = selectedTableRange
+    ? selectedTableRange.startRow === selectedTableRange.endRow &&
+      selectedTableRange.startCol === selectedTableRange.endCol
+      ? `${selectedTableRange.startRow + 1}행 ${selectedTableRange.startCol + 1}열 셀`
+      : `${selectedTableRange.startRow + 1}:${selectedTableRange.endRow + 1}행, ${selectedTableRange.startCol + 1}:${selectedTableRange.endCol + 1}열`
+    : "";
 
   return (
     <aside className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto overflow-x-hidden border-l border-zinc-200 bg-white p-4">
@@ -3634,54 +3663,169 @@ function PropertyPanel({
                 </div>
                 <label className="grid min-w-0 gap-1">
                   <span className="text-zinc-500">
-                    Selected Cell Background
+                    Selected Cell Range Background
                   </span>
                   <input
                     type="color"
-                    value={
-                      parseTableData(selectedComponent)[
-                        getSelectedTableCell(selectedComponent).row
-                      ]?.[getSelectedTableCell(selectedComponent).col]
-                        ?.backgroundColor ?? "#ffffff"
-                    }
+                    value={selectedTableCellData?.backgroundColor ?? "#ffffff"}
                     onChange={(event) =>
-                      updateSelectedTableCellBackground(
-                        selectedComponent,
-                        event.target.value,
-                      )
+                      updateSelectedTableRangeStyle(selectedComponent, {
+                        backgroundColor: event.target.value,
+                      })
                     }
                     className="h-9 w-full rounded-md border border-zinc-200"
                   />
                   <span className="text-xs text-zinc-400">
-                    {getSelectedTableCell(selectedComponent).row + 1}행{" "}
-                    {getSelectedTableCell(selectedComponent).col + 1}열 셀
+                    {selectedTableRangeLabel}에 적용됩니다.
                   </span>
                 </label>
-                <label className="grid min-w-0 gap-1">
-                  <span className="text-zinc-500">Selected Cell Align</span>
-                  <select
-                    value={
-                      parseTableData(selectedComponent)[
-                        getSelectedTableCell(selectedComponent).row
-                      ]?.[getSelectedTableCell(selectedComponent).col]
-                        ?.textAlign ?? "left"
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="grid min-w-0 gap-1">
+                    <span className="text-zinc-500">좌우 정렬</span>
+                    <select
+                      value={selectedTableCellData?.textAlign ?? "left"}
+                      onChange={(event) =>
+                        updateSelectedTableRangeTextAlign(
+                          selectedComponent,
+                          event.target.value as "left" | "center" | "right",
+                        )
+                      }
+                      className="h-9 rounded-md border border-zinc-200 px-2"
+                    >
+                      <option value="left">좌측</option>
+                      <option value="center">가운데</option>
+                      <option value="right">우측</option>
+                    </select>
+                  </label>
+                  <label className="grid min-w-0 gap-1">
+                    <span className="text-zinc-500">상하 정렬</span>
+                    <select
+                      value={selectedTableCellData?.verticalAlign ?? "top"}
+                      onChange={(event) =>
+                        updateSelectedTableRangeVerticalAlign(
+                          selectedComponent,
+                          event.target.value as "top" | "middle" | "bottom",
+                        )
+                      }
+                      className="h-9 rounded-md border border-zinc-200 px-2"
+                    >
+                      <option value="top">위</option>
+                      <option value="middle">가운데</option>
+                      <option value="bottom">아래</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="grid gap-1">
+                    <span className="text-zinc-500">글자색</span>
+                    <input
+                      type="color"
+                      value={String(
+                        selectedTableCellData?.color ??
+                          selectedComponent.props.color ??
+                          "#111827",
+                      )}
+                      onChange={(event) =>
+                        updateSelectedTableRangeStyle(selectedComponent, {
+                          color: event.target.value,
+                        })
+                      }
+                      className="h-9 w-full rounded-md border border-zinc-200"
+                    />
+                  </label>
+                  <NumberField
+                    label="크기"
+                    value={Number(
+                      selectedTableCellData?.fontSize ??
+                        selectedComponent.props.fontSize ??
+                        14,
+                    )}
+                    min={1}
+                    max={200}
+                    onChange={(value) =>
+                      updateSelectedTableRangeStyle(selectedComponent, {
+                        fontSize: value,
+                      })
                     }
+                  />
+                </div>
+                <label className="grid gap-1">
+                  <span className="text-zinc-500">글꼴</span>
+                  <select
+                    value={String(
+                      selectedTableCellData?.fontFamily ??
+                        selectedComponent.props.fontFamily ??
+                        FONT_OPTIONS[0].value,
+                    )}
                     onChange={(event) =>
-                      updateSelectedTableRangeTextAlign(
-                        selectedComponent,
-                        event.target.value as "left" | "center" | "right",
-                      )
+                      updateSelectedTableRangeStyle(selectedComponent, {
+                        fontFamily: event.target.value,
+                      })
                     }
                     className="h-9 rounded-md border border-zinc-200 px-2"
                   >
-                    <option value="left">좌측 정렬</option>
-                    <option value="center">가운데 정렬</option>
-                    <option value="right">우측 정렬</option>
+                    {FONT_OPTIONS.map((font) => (
+                      <option key={font.value} value={font.value}>
+                        {font.label}
+                      </option>
+                    ))}
                   </select>
-                  <span className="text-xs text-zinc-400">
-                    드래그 선택한 셀 범위에 적용됩니다.
-                  </span>
                 </label>
+                <label className="grid gap-1">
+                  <span className="text-zinc-500">두께</span>
+                  <select
+                    value={String(
+                      normalizeFontWeight(
+                        selectedTableCellData?.fontWeight ??
+                          selectedComponent.props.fontWeight,
+                      ),
+                    )}
+                    onChange={(event) =>
+                      updateSelectedTableRangeStyle(selectedComponent, {
+                        fontWeight: Number(event.target.value),
+                      })
+                    }
+                    className="h-9 rounded-md border border-zinc-200 px-2"
+                  >
+                    {FONT_WEIGHT_OPTIONS.map((weight) => (
+                      <option key={weight.value} value={weight.value}>
+                        {weight.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <NumberField
+                    label="줄간격 (%)"
+                    value={Number(
+                      selectedTableCellData?.lineHeight ??
+                        selectedComponent.props.lineHeight ??
+                        150,
+                    )}
+                    min={0}
+                    max={300}
+                    onChange={(value) =>
+                      updateSelectedTableRangeStyle(selectedComponent, {
+                        lineHeight: value,
+                      })
+                    }
+                  />
+                  <NumberField
+                    label="자간 (px)"
+                    value={Number(
+                      selectedTableCellData?.letterSpacing ??
+                        selectedComponent.props.letterSpacing ??
+                        0,
+                    )}
+                    min={-5}
+                    max={30}
+                    onChange={(value) =>
+                      updateSelectedTableRangeStyle(selectedComponent, {
+                        letterSpacing: value,
+                      })
+                    }
+                  />
+                </div>
               </div>
             ) : null}
 

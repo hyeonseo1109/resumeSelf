@@ -35,6 +35,18 @@ import type { ResumeComponent } from "@/types/project";
 
 const TABLE_CLIPBOARD_MIME = "application/x-resumeself-table";
 
+function getCellVerticalAlign(value: TableData[number][number]["verticalAlign"]) {
+  if (value === "middle") {
+    return "center";
+  }
+
+  if (value === "bottom") {
+    return "flex-end";
+  }
+
+  return "flex-start";
+}
+
 export function TableComponent({
   component,
   preview,
@@ -555,13 +567,22 @@ export function TableComponent({
                 backgroundColor:
                   cell.backgroundColor ??
                   String(component.props.cellBackgroundColor ?? "#ffffff"),
-                color: String(component.props.color ?? "#111827"),
-                fontFamily: String(component.props.fontFamily ?? "Inter"),
-                fontSize: Number(component.props.fontSize ?? 14),
-                fontWeight: Number(component.props.fontWeight ?? 400),
-                lineHeight: `${Number(component.props.lineHeight ?? 150)}%`,
-                letterSpacing: Number(component.props.letterSpacing ?? 0),
+                color: String(cell.color ?? component.props.color ?? "#111827"),
+                fontFamily: String(
+                  cell.fontFamily ?? component.props.fontFamily ?? "Inter",
+                ),
+                fontSize: Number(cell.fontSize ?? component.props.fontSize ?? 14),
+                fontWeight: Number(
+                  cell.fontWeight ?? component.props.fontWeight ?? 400,
+                ),
+                lineHeight: `${Number(
+                  cell.lineHeight ?? component.props.lineHeight ?? 150,
+                )}%`,
+                letterSpacing: Number(
+                  cell.letterSpacing ?? component.props.letterSpacing ?? 0,
+                ),
                 textAlign: cell.textAlign ?? "left",
+                alignContent: getCellVerticalAlign(cell.verticalAlign),
               }}
             />
           );
