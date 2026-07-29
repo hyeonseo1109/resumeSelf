@@ -74,6 +74,17 @@ function applyRichTextSpacing(element: HTMLElement, component: ResumeComponent) 
   });
 }
 
+function getPdfVerticalAlignNudge(value: unknown) {
+  return String(value ?? "top") === "middle" ? "translateY(-0.22em)" : "";
+}
+
+function applyPdfTextRendering(element: HTMLElement) {
+  element.style.setProperty("font-synthesis", "none");
+  element.style.setProperty("font-synthesis-weight", "none");
+  element.style.setProperty("-webkit-font-smoothing", "antialiased");
+  element.style.setProperty("text-rendering", "geometricPrecision");
+}
+
 export function createPdfExportNode({
   project,
   activePage,
@@ -108,6 +119,7 @@ export function createPdfExportNode({
   wrapper.style.zIndex = "2147483647";
   wrapper.style.pointerEvents = "none";
   wrapper.style.fontFamily = "Arial, Helvetica, sans-serif";
+  applyPdfTextRendering(wrapper);
 
   const canvas = document.createElement("div");
   canvas.style.position = "relative";
@@ -116,6 +128,7 @@ export function createPdfExportNode({
   canvas.style.minHeight = `${canvasHeight}px`;
   canvas.style.background = pageBackground;
   canvas.style.color = "#111827";
+  applyPdfTextRendering(canvas);
 
   const header = document.createElement("div");
   header.style.display = "flex";
@@ -190,6 +203,10 @@ export async function waitForPdfNode(root: HTMLElement) {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
+  if ("fonts" in document) {
+    await document.fonts.ready.catch(() => undefined);
+  }
+
   const images = Array.from(root.querySelectorAll("img"));
   await Promise.all(
     images.map(
@@ -226,6 +243,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   frame.style.lineHeight = `${Number(component.props.lineHeight ?? 150)}%`;
   frame.style.letterSpacing = `${Number(component.props.letterSpacing ?? 0)}px`;
   frame.style.textAlign = String(component.props.textAlign ?? "left");
+  applyPdfTextRendering(frame);
   if (component.type !== "divider" && component.props.backgroundColor) {
     frame.style.background = withAlpha(
       String(component.props.backgroundColor),
@@ -252,6 +270,8 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     content.style.whiteSpace = "pre-wrap";
     content.style.overflowWrap = "anywhere";
     content.style.wordBreak = "break-word";
+    content.style.transform = getPdfVerticalAlignNudge(component.props.verticalAlign);
+    applyPdfTextRendering(content);
     content.innerHTML = sanitizeRichTextHtml(component.content ?? "");
     applyRichTextSpacing(content, component);
     frame.appendChild(content);
@@ -312,6 +332,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
         cellNode.style.fontWeight = String(
           cell.fontWeight ?? component.props.fontWeight ?? 400,
         );
+        applyPdfTextRendering(cellNode);
         cellNode.style.lineHeight = `${Number(
           cell.lineHeight ?? component.props.lineHeight ?? 150,
         )}%`;
@@ -320,19 +341,24 @@ function createPdfComponent(component: ResumeComponent, top: number) {
         )}px`;
         cellNode.style.textAlign = cell.textAlign ?? "left";
         cellNode.style.display = "flex";
-        cellNode.style.alignItems =
-          cell.verticalAlign === "middle"
-            ? "center"
-            : cell.verticalAlign === "bottom"
-              ? "flex-end"
-              : "flex-start";
-        cellNode.style.justifyContent =
-          cell.textAlign === "center"
-            ? "center"
-            : cell.textAlign === "right"
-              ? "flex-end"
-              : "flex-start";
-        cellNode.textContent = cell.text;
+        cellNode.style.alignItems = String(
+          getAlignItemsFromVerticalAlign(cell.verticalAlign),
+        );
+        const cellContent = document.createElement("span");
+        cellContent.style.display = "block";
+        cellContent.style.width = "100%";
+        cellContent.style.minWidth = "0";
+        cellContent.style.textAlign = cell.textAlign ?? "left";
+        cellContent.style.lineHeight = `${Number(
+          cell.lineHeight ?? component.props.lineHeight ?? 150,
+        )}%`;
+        cellContent.style.letterSpacing = `${Number(
+          cell.letterSpacing ?? component.props.letterSpacing ?? 0,
+        )}px`;
+        cellContent.style.transform = getPdfVerticalAlignNudge(cell.verticalAlign);
+        applyPdfTextRendering(cellContent);
+        cellContent.textContent = cell.text;
+        cellNode.appendChild(cellContent);
         frame.appendChild(cellNode);
       });
     });
@@ -374,6 +400,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     title.style.padding = "12px 12px 4px";
     title.style.fontSize = `${Number(component.props.fontSize ?? 15)}px`;
     title.style.fontWeight = String(component.props.fontWeight ?? 700);
+    applyPdfTextRendering(title);
     title.innerHTML = sanitizeRichTextHtml(component.content ?? "Popup title");
     frame.appendChild(title);
 
@@ -382,6 +409,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     description.style.fontSize = "12px";
     description.style.lineHeight = "1.5";
     description.style.color = "#71717a";
+    applyPdfTextRendering(description);
     description.textContent = String(component.props.description ?? "");
     frame.appendChild(description);
     return frame;
@@ -412,6 +440,8 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     label.style.whiteSpace = "normal";
     label.style.overflowWrap = "anywhere";
     label.style.wordBreak = "break-word";
+    label.style.transform = getPdfVerticalAlignNudge(component.props.verticalAlign);
+    applyPdfTextRendering(label);
     label.innerHTML = sanitizeLinkLabelHtml(component.content ?? "링크");
     applyLinkWrapping(label);
     applyRichTextSpacing(label, component);
