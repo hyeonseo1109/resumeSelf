@@ -30,6 +30,7 @@ import NextLink from "next/link";
 import type {
   CSSProperties,
   FormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
@@ -3492,8 +3493,15 @@ function CanvasBackgroundControl({
   ) => void;
 }) {
   const [activePointId, setActivePointId] = useState<string | null>(null);
+  const [isPointDragging, setIsPointDragging] = useState(false);
   const pointEditorRef = useRef<HTMLDivElement | null>(null);
   const minimapRef = useRef<HTMLDivElement | null>(null);
+  const pointScrollRef = useRef<HTMLDivElement | null>(null);
+  const copiedPointRef = useRef<CanvasBackgroundStyle["points"][number] | null>(
+    null,
+  );
+  const pointHistoryRef = useRef<CanvasBackgroundStyle[]>([]);
+  const pointRedoHistoryRef = useRef<CanvasBackgroundStyle[]>([]);
   const activePoint =
     canvasBackgroundStyle.points.find((point) => point.id === activePointId) ??
     null;
@@ -3529,6 +3537,51 @@ function CanvasBackgroundControl({
     onUpdateCanvasBackgroundStyle(style);
   }
 
+  function recordPointHistory() {
+    pointHistoryRef.current = [
+      ...pointHistoryRef.current.slice(-29),
+      canvasBackgroundStyle,
+    ];
+    pointRedoHistoryRef.current = [];
+  }
+
+  function restorePointStyle(style: CanvasBackgroundStyle) {
+    updateStyle(style);
+    setActivePointId((currentId) =>
+      currentId && style.points.some((point) => point.id === currentId)
+        ? currentId
+        : (style.points.at(-1)?.id ?? null),
+    );
+  }
+
+  function undoPointChange() {
+    const previous = pointHistoryRef.current.at(-1);
+    if (!previous) {
+      return;
+    }
+
+    pointRedoHistoryRef.current = [
+      ...pointRedoHistoryRef.current.slice(-29),
+      canvasBackgroundStyle,
+    ];
+    pointHistoryRef.current = pointHistoryRef.current.slice(0, -1);
+    restorePointStyle(previous);
+  }
+
+  function redoPointChange() {
+    const next = pointRedoHistoryRef.current.at(-1);
+    if (!next) {
+      return;
+    }
+
+    pointHistoryRef.current = [
+      ...pointHistoryRef.current.slice(-29),
+      canvasBackgroundStyle,
+    ];
+    pointRedoHistoryRef.current = pointRedoHistoryRef.current.slice(0, -1);
+    restorePointStyle(next);
+  }
+
   function setMode(mode: CanvasBackgroundStyle["mode"]) {
     updateStyle({
       mode,
@@ -3561,8 +3614,16 @@ function CanvasBackgroundControl({
       return;
     }
 
+    if (activePointId) {
+      event.preventDefault();
+      event.stopPropagation();
+      setActivePointId(null);
+      return;
+    }
+
     const point = getMinimapPoint(event);
     const nextPoint = createGradientPoint(point.x, point.y);
+    recordPointHistory();
     updateStyle({
       mode: "gradient",
       color: canvasBackgroundStyle.color,
@@ -3574,7 +3635,12 @@ function CanvasBackgroundControl({
   function updatePoint(
     id: string,
     patch: Partial<CanvasBackgroundStyle["points"][number]>,
+    shouldRecordHistory = false,
   ) {
+    if (shouldRecordHistory) {
+      recordPointHistory();
+    }
+
     updateStyle({
       ...canvasBackgroundStyle,
       mode: "gradient",
@@ -3585,12 +3651,96 @@ function CanvasBackgroundControl({
   }
 
   function deletePoint(id: string) {
+    recordPointHistory();
     updateStyle({
       ...canvasBackgroundStyle,
       mode: "gradient",
       points: canvasBackgroundStyle.points.filter((point) => point.id !== id),
     });
     setActivePointId(null);
+  }
+
+  function copyActivePoint() {
+    if (!activePoint) {
+      return false;
+    }
+
+    copiedPointRef.current = { ...activePoint };
+    return true;
+  }
+
+  function pasteCopiedPoint() {
+    const copiedPoint = copiedPointRef.current;
+    if (!copiedPoint) {
+      return false;
+    }
+
+    const nextPoint = {
+      ...copiedPoint,
+      id: crypto.randomUUID(),
+      x: clamp(copiedPoint.x + 4, 0, 100),
+      y: clamp(copiedPoint.y + 4, 0, 100),
+    };
+
+    recordPointHistory();
+    updateStyle({
+      ...canvasBackgroundStyle,
+      mode: "gradient",
+      points: [...canvasBackgroundStyle.points, nextPoint],
+    });
+    setActivePointId(nextPoint.id);
+    return true;
+  }
+
+  function handleGradientKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const isModifierPressed = event.metaKey || event.ctrlKey;
+    const key = event.key.toLowerCase();
+    const isInputTarget = Boolean(
+      (event.target as HTMLElement | null)?.closest("input, textarea, select"),
+    );
+
+    if (!activePointId) {
+      return;
+    }
+
+    if (isModifierPressed && event.shiftKey && key === "z") {
+      event.preventDefault();
+      event.stopPropagation();
+      redoPointChange();
+      return;
+    }
+
+    if (isModifierPressed && key === "z") {
+      event.preventDefault();
+      event.stopPropagation();
+      undoPointChange();
+      return;
+    }
+
+    if (isModifierPressed && key === "c") {
+      if (copyActivePoint()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+
+    if (isModifierPressed && key === "v") {
+      if (pasteCopiedPoint()) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+
+    if (
+      !isInputTarget &&
+      (event.key === "Delete" || event.key === "Backspace")
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      deletePoint(activePointId);
+    }
   }
 
   function startPointDrag(
@@ -3600,6 +3750,9 @@ function CanvasBackgroundControl({
     event.preventDefault();
     event.stopPropagation();
     setActivePointId(id);
+    setIsPointDragging(true);
+    requestAnimationFrame(() => pointScrollRef.current?.focus());
+    recordPointHistory();
 
     function handlePointerMove(pointerEvent: PointerEvent) {
       const rect = minimapRef.current?.getBoundingClientRect();
@@ -3616,6 +3769,7 @@ function CanvasBackgroundControl({
     function handlePointerUp() {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
+      setIsPointDragging(false);
     }
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -3666,14 +3820,20 @@ function CanvasBackgroundControl({
         <div className="grid gap-2">
           <span className="text-zinc-500">그라데이션 편집</span>
           <div
-            className="max-h-72 overflow-y-auto rounded-md border border-zinc-200 bg-zinc-50 p-2"
+            ref={pointScrollRef}
+            tabIndex={0}
+            className={cn(
+              "max-h-72 rounded-md border border-zinc-200 bg-zinc-50 p-2 outline-none focus:ring-2 focus:ring-emerald-500/40",
+              isPointDragging ? "overflow-y-hidden" : "overflow-y-auto",
+            )}
             onPointerDown={(event) => event.stopPropagation()}
+            onKeyDownCapture={handleGradientKeyDown}
           >
             <div
               ref={minimapRef}
               role="button"
               tabIndex={0}
-              className="relative w-full overflow-hidden rounded-sm ring-1 ring-zinc-200"
+              className="relative mb-20 w-full overflow-visible rounded-sm ring-1 ring-zinc-200"
               style={{
                 aspectRatio: `840 / ${Math.max(840, canvasHeight)}`,
                 background: getCanvasBackgroundCss(canvasBackgroundStyle),
@@ -3699,6 +3859,7 @@ function CanvasBackgroundControl({
                   onClick={(event) => {
                     event.stopPropagation();
                     setActivePointId(point.id);
+                    pointScrollRef.current?.focus();
                   }}
                 />
               ))}
@@ -3709,7 +3870,10 @@ function CanvasBackgroundControl({
                   className="absolute z-20 grid w-36 gap-2 rounded-md border border-zinc-200 bg-white p-2 text-xs shadow-lg"
                   style={{
                     left: `min(${activePoint.x}%, calc(100% - 9rem))`,
-                    top: `min(calc(${activePoint.y}% + 12px), calc(100% - 8.5rem))`,
+                    top:
+                      activePoint.y > 78
+                        ? `calc(${activePoint.y}% - 8.5rem)`
+                        : `calc(${activePoint.y}% + 12px)`,
                   }}
                   onPointerDown={(event) => event.stopPropagation()}
                 >
@@ -3719,7 +3883,11 @@ function CanvasBackgroundControl({
                       type="color"
                       value={activePoint.color}
                       onChange={(event) =>
-                        updatePoint(activePoint.id, { color: event.target.value })
+                        updatePoint(
+                          activePoint.id,
+                          { color: event.target.value },
+                          true,
+                        )
                       }
                       className="h-8 w-full rounded border border-zinc-200"
                     />
@@ -3730,7 +3898,11 @@ function CanvasBackgroundControl({
                     min={5}
                     max={160}
                     onChange={(value) =>
-                      updatePoint(activePoint.id, { size: clamp(value, 5, 160) })
+                      updatePoint(
+                        activePoint.id,
+                        { size: clamp(value, 5, 160) },
+                        true,
+                      )
                     }
                   />
                   <NumberField
@@ -3739,9 +3911,13 @@ function CanvasBackgroundControl({
                     min={0}
                     max={100}
                     onChange={(value) =>
-                      updatePoint(activePoint.id, {
-                        opacity: clamp(value, 0, 100),
-                      })
+                      updatePoint(
+                        activePoint.id,
+                        {
+                          opacity: clamp(value, 0, 100),
+                        },
+                        true,
+                      )
                     }
                   />
                   <button

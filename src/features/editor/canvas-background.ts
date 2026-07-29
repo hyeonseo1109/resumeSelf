@@ -52,7 +52,7 @@ export function getCanvasBackgroundCss(style: CanvasBackgroundStyle) {
 
   const layers = style.points.map((point) => {
     const { r, g, b } = hexToRgb(point.color);
-    const opacity = Math.max(0, Math.min(100, point.opacity)) / 100;
+    const opacity = 1 - Math.max(0, Math.min(100, point.opacity)) / 100;
     const size = Math.max(5, Math.min(160, point.size));
 
     return `radial-gradient(circle at ${point.x}% ${point.y}%, rgba(${r}, ${g}, ${b}, ${opacity}) 0%, rgba(${r}, ${g}, ${b}, ${opacity * 0.55}) ${size * 0.42}%, rgba(${r}, ${g}, ${b}, 0) ${size}%)`;
@@ -68,6 +68,6 @@ export function createGradientPoint(x: number, y: number) {
     y: Math.max(0, Math.min(100, y)),
     color: "#dbeafe",
     size: 55,
-    opacity: 80,
+    opacity: 20,
   };
 }
