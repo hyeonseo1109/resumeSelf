@@ -67,6 +67,33 @@ export function getSelectedTableCell(component: ResumeComponent) {
   };
 }
 
+export function getSelectedTableRange(component: ResumeComponent) {
+  const selectedCell = getSelectedTableCell(component);
+  const startRow = Math.max(
+    0,
+    Number(component.props.selectedCellStartRow ?? selectedCell.row),
+  );
+  const startCol = Math.max(
+    0,
+    Number(component.props.selectedCellStartCol ?? selectedCell.col),
+  );
+  const endRow = Math.max(
+    0,
+    Number(component.props.selectedCellEndRow ?? selectedCell.row),
+  );
+  const endCol = Math.max(
+    0,
+    Number(component.props.selectedCellEndCol ?? selectedCell.col),
+  );
+
+  return {
+    startRow: Math.min(startRow, endRow),
+    endRow: Math.max(startRow, endRow),
+    startCol: Math.min(startCol, endCol),
+    endCol: Math.max(startCol, endCol),
+  };
+}
+
 function parseSizeList(value: unknown, count: number, total: number) {
   try {
     const parsed = JSON.parse(String(value ?? "[]"));

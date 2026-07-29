@@ -4,6 +4,7 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import { useState } from "react";
 import {
   getSelectedTableCell,
+  getSelectedTableRange,
   getTableColWidths,
   getTableCols,
   getTableGridStyle,
@@ -40,10 +41,15 @@ export function TableComponent({
     row: number;
     col: number;
   } | null>(null);
+  const [cellDragStart, setCellDragStart] = useState<{
+    row: number;
+    col: number;
+  } | null>(null);
   const data = parseTableData(component);
   const rows = getTableRows(component);
   const cols = getTableCols(component);
   const selectedCell = getSelectedTableCell(component);
+  const selectedRange = getSelectedTableRange(component);
   const rowHeights = getTableRowHeights(component);
   const colWidths = getTableColWidths(component);
 
@@ -54,6 +60,28 @@ export function TableComponent({
         ...component.props,
         selectedCellRow: row,
         selectedCellCol: col,
+        selectedCellStartRow: row,
+        selectedCellStartCol: col,
+        selectedCellEndRow: row,
+        selectedCellEndCol: col,
+      },
+    });
+  }
+
+  function selectCellRange(
+    start: { row: number; col: number },
+    end: { row: number; col: number },
+  ) {
+    onSelect();
+    onUpdate({
+      props: {
+        ...component.props,
+        selectedCellRow: end.row,
+        selectedCellCol: end.col,
+        selectedCellStartRow: start.row,
+        selectedCellStartCol: start.col,
+        selectedCellEndRow: end.row,
+        selectedCellEndCol: end.col,
       },
     });
   }
@@ -64,6 +92,10 @@ export function TableComponent({
         ...component.props,
         selectedCellRow: row,
         selectedCellCol: col,
+        selectedCellStartRow: row,
+        selectedCellStartCol: col,
+        selectedCellEndRow: row,
+        selectedCellEndCol: col,
         tableData: serializeTableData(updateTableCellText(data, row, col, text)),
       },
     });
@@ -167,6 +199,31 @@ export function TableComponent({
     window.addEventListener("pointerup", handlePointerUp);
   }
 
+  function startCellRangeSelection(row: number, col: number) {
+    if (preview) {
+      return;
+    }
+
+    const start = { row, col };
+    setCellDragStart(start);
+    selectCellRange(start, start);
+
+    function handlePointerUp() {
+      setCellDragStart(null);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  function extendCellRangeSelection(row: number, col: number) {
+    if (!cellDragStart || preview) {
+      return;
+    }
+
+    selectCellRange(cellDragStart, { row, col });
+  }
+
   return (
     <div
       className="relative h-full w-full"
@@ -190,6 +247,11 @@ export function TableComponent({
         row.map((cell, colIndex) => {
           const isSelected =
             selectedCell.row === rowIndex && selectedCell.col === colIndex;
+          const isInSelectedRange =
+            rowIndex >= selectedRange.startRow &&
+            rowIndex <= selectedRange.endRow &&
+            colIndex >= selectedRange.startCol &&
+            colIndex <= selectedRange.endCol;
 
           return (
             <textarea
@@ -198,11 +260,13 @@ export function TableComponent({
               value={cell.text}
               onPointerDown={(event) => {
                 event.stopPropagation();
+                startCellRangeSelection(rowIndex, colIndex);
               }}
+              onPointerEnter={() => extendCellRangeSelection(rowIndex, colIndex)}
               onMouseDown={(event) => {
                 event.stopPropagation();
-                selectCell(rowIndex, colIndex);
               }}
+              onDragStart={(event) => event.preventDefault()}
               onContextMenu={(event) => {
                 if (preview) {
                   return;
@@ -223,6 +287,9 @@ export function TableComponent({
               className={cn(
                 "min-h-0 resize-none border-b border-r border-zinc-300 bg-transparent p-2 text-sm leading-5 outline-none",
                 !preview && "focus:ring-2 focus:ring-emerald-500",
+                isInSelectedRange &&
+                  !preview &&
+                  "bg-emerald-50 ring-1 ring-inset ring-emerald-300",
                 isSelected && !preview && "ring-2 ring-emerald-500",
               )}
               style={{
