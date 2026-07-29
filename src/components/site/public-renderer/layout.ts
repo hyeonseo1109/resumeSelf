@@ -1,4 +1,5 @@
 import type { ResumeComponent, ResumePage } from "@/types/project";
+import { getEffectiveComponentY } from "@/features/editor/spacer-layout";
 import type { MobileComponentNode, PageLayout, RenderedComponent } from "./types";
 
 export const PUBLIC_CANVAS_WIDTH = 840;
@@ -13,7 +14,12 @@ export function getPageLayouts(pages: ResumePage[]): PageLayout[] {
     );
     const height = Math.max(
       240,
-      ...components.map((component) => component.y + component.height + 72),
+      ...components.map(
+        (component) =>
+          getEffectiveComponentY(components, component) +
+          component.height +
+          72,
+      ),
     );
     const layout = { page, components, offset, height };
     offset += height + 16;
@@ -31,7 +37,10 @@ export function getRenderedComponents(pageLayouts: PageLayout[], isScrollMode: b
     .flatMap((layout) =>
       layout.components.map((component) => ({
         component,
-        displayTop: component.y + layout.offset + (isScrollMode ? 44 : 0),
+        displayTop:
+          getEffectiveComponentY(layout.components, component) +
+          layout.offset +
+          (isScrollMode ? 44 : 0),
       })),
     )
     .filter(({ component }) => !component.props.popupId);

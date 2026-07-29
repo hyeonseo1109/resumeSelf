@@ -8,6 +8,10 @@ import {
   getJustifyContentFromTextAlign,
   withAlpha,
 } from "./view-helpers";
+import {
+  getEffectiveComponentY,
+  getPageTitleSpacerOffset,
+} from "@/features/editor/spacer-layout";
 import { getTableGridStyle, parseTableData } from "@/features/editor/table";
 import { sanitizeRichTextHtml } from "@/lib/utils/rich-text";
 
@@ -92,7 +96,9 @@ export function createPdfExportNode({
       const title = document.createElement("div");
       title.style.position = "absolute";
       title.style.left = "48px";
-      title.style.top = `${layout.offset + 76}px`;
+      title.style.top = `${
+        layout.offset + 76 + getPageTitleSpacerOffset(layout.components)
+      }px`;
       title.style.fontSize = "11px";
       title.style.fontWeight = "700";
       title.style.letterSpacing = "1.4px";
@@ -108,7 +114,9 @@ export function createPdfExportNode({
         canvas.appendChild(
           createPdfComponent(
             component,
-            component.y + layout.offset + (isScrollMode ? 44 : 0),
+            getEffectiveComponentY(layout.components, component) +
+              layout.offset +
+              (isScrollMode ? 44 : 0),
           ),
         );
       });

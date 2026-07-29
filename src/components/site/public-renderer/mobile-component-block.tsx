@@ -16,6 +16,15 @@ export function MobileComponentBlock({
 }) {
   const { component, children } = node;
 
+  if (component.type === "spacer") {
+    return (
+      <div
+        aria-hidden="true"
+        style={{ height: Math.max(0, component.height) }}
+      />
+    );
+  }
+
   if (component.type === "section" || component.type === "container") {
     return (
       <div

@@ -4,7 +4,13 @@ import { create } from "zustand";
 import { createDefaultTableData, serializeTableData } from "@/features/editor/table";
 import type { ComponentType, ResumeComponent, ResumeProject, SaveStatus } from "@/types/project";
 
-type ComponentInsertRect = { x: number; y: number; width?: number; height?: number };
+type ComponentInsertRect = {
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  pageId?: string;
+};
 
 function normalizeSlug(value: string) {
   return value
@@ -258,15 +264,19 @@ function addComponentToState(
   }
 
   const component = buildComponent(type, position, state.openPopupId);
-  const activePage = state.project.pages.find((page) => page.id === state.activePageId) ?? state.project.pages[0];
+  const targetPage =
+    state.project.pages.find((page) => page.id === position.pageId) ??
+    state.project.pages.find((page) => page.id === state.activePageId) ??
+    state.project.pages[0];
 
   return {
     saveStatus: "dirty",
     selectedComponentId: component.id,
+    activePageId: targetPage.id,
     project: {
       ...state.project,
       pages: state.project.pages.map((page) =>
-        page.id === activePage.id
+        page.id === targetPage.id
           ? {
               ...page,
               sections: page.sections.map((section, index) =>

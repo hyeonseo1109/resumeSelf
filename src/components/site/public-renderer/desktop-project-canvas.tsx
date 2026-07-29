@@ -1,6 +1,7 @@
 "use client";
 
 import type { ResumeProject } from "@/types/project";
+import { getPageTitleSpacerOffset } from "@/features/editor/spacer-layout";
 import { PUBLIC_CANVAS_WIDTH } from "./layout";
 import { PublicComponent } from "./public-component";
 import type { PageLayout, RenderedComponent } from "./types";
@@ -48,7 +49,13 @@ export function DesktopProjectCanvas({
                   key={layout.page.id}
                   id={target}
                   className="absolute left-0 w-full scroll-mt-6 px-12 pt-4"
-                  style={{ top: layout.offset + 12, height: 44 }}
+                  style={{
+                    top:
+                      layout.offset +
+                      12 +
+                      getPageTitleSpacerOffset(layout.components),
+                    height: 44,
+                  }}
                 >
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
                     {label}

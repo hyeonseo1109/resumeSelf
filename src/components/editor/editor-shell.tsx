@@ -46,6 +46,10 @@ import {
   createPdfExportNode,
   waitForPdfNode,
 } from "@/features/editor/pdf-export";
+import {
+  getEffectiveComponentY,
+  getPageTitleSpacerOffset,
+} from "@/features/editor/spacer-layout";
 import { createEditorStore } from "@/features/editor/store";
 import {
   getSelectedTableCell,
@@ -255,7 +259,7 @@ export function EditorShell({ project }: EditorShellProps) {
         240,
         ...pageComponents.map(
           (component) =>
-            component.y +
+            getEffectiveComponentY(pageComponents, component) +
             component.height +
             72 +
             (isScrollMode ? SCROLL_CANVAS_HEADER_HEIGHT : 0),
@@ -275,7 +279,7 @@ export function EditorShell({ project }: EditorShellProps) {
           layout.components.map((component) => ({
             component,
             displayTop:
-              component.y +
+              getEffectiveComponentY(layout.components, component) +
               layout.offset +
               44 +
               SCROLL_CANVAS_HEADER_HEIGHT,
@@ -283,7 +287,7 @@ export function EditorShell({ project }: EditorShellProps) {
         )
       : activePageComponents.map((component) => ({
           component,
-          displayTop: component.y,
+          displayTop: getEffectiveComponentY(activePageComponents, component),
         }))
   )
     .filter(({ component }) => !component.props.popupId)
@@ -327,7 +331,12 @@ export function EditorShell({ project }: EditorShellProps) {
         1120,
         ...activePageComponents
           .filter((component) => !component.props.popupId)
-          .map((component) => component.y + component.height + 160),
+          .map(
+            (component) =>
+              getEffectiveComponentY(activePageComponents, component) +
+              component.height +
+              160,
+          ),
       );
   const canvasBackground =
     activePage?.canvasBackground ??
@@ -808,6 +817,51 @@ export function EditorShell({ project }: EditorShellProps) {
     return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
   }
 
+  function getInsertTarget(rect: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  }) {
+    if (!isScrollMode) {
+      return {
+        pageId: activePage?.id,
+        x: rect.left,
+        y: rect.top,
+      };
+    }
+
+    const centerY = (rect.top + rect.bottom) / 2;
+    const layout =
+      pageLayouts.find(
+        (item, index) =>
+          centerY >= item.offset &&
+          centerY <
+            item.offset +
+              item.height +
+              (index === pageLayouts.length - 1 ? 0 : 16),
+      ) ??
+      pageLayouts.find((item) => centerY < item.offset) ??
+      pageLayouts.at(-1);
+
+    if (!layout) {
+      return {
+        pageId: activePage?.id,
+        x: rect.left,
+        y: rect.top,
+      };
+    }
+
+    return {
+      pageId: layout.page.id,
+      x: rect.left,
+      y: Math.max(
+        0,
+        rect.top - layout.offset - 44 - SCROLL_CANVAS_HEADER_HEIGHT,
+      ),
+    };
+  }
+
   function handleComponentSelect(
     id: string,
     event?: ReactMouseEvent<HTMLDivElement>,
@@ -876,11 +930,13 @@ export function EditorShell({ project }: EditorShellProps) {
         });
         const width = Math.max(MIN_INSERT_SIZE.width, rect.right - rect.left);
         const height = Math.max(MIN_INSERT_SIZE.height, rect.bottom - rect.top);
+        const target = getInsertTarget(rect);
 
         recordHistory();
         addComponentAt(insertType, {
-          x: Math.round(rect.left),
-          y: Math.round(rect.top),
+          pageId: target.pageId,
+          x: Math.round(target.x),
+          y: Math.round(target.y),
           width: Math.round(width),
           height: Math.round(height),
         });
@@ -1960,7 +2016,11 @@ export function EditorShell({ project }: EditorShellProps) {
                           id={`editor-section-${target}`}
                           className="absolute left-0 w-full scroll-mt-6 px-12 pt-4"
                           style={{
-                            top: layout.offset + SCROLL_CANVAS_HEADER_HEIGHT + 12,
+                            top:
+                              layout.offset +
+                              SCROLL_CANVAS_HEADER_HEIGHT +
+                              12 +
+                              getPageTitleSpacerOffset(layout.components),
                             height: 44,
                           }}
                         >
