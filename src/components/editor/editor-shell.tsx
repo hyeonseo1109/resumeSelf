@@ -231,6 +231,7 @@ export function EditorShell({ project }: EditorShellProps) {
   const copyBufferRef = useRef<ResumeComponent[]>([]);
   const historyRef = useRef<ResumeProject[]>([]);
   const historyActionRef = useRef<Array<"general" | "textAlign">>([]);
+  const coalescedHistoryRef = useRef<Record<string, number>>({});
 
   const activePage =
     editorProject.pages.find((page) => page.id === activePageId) ??
@@ -358,6 +359,36 @@ export function EditorShell({ project }: EditorShellProps) {
     historyActionRef.current = [...historyActionRef.current.slice(-29), action];
   }
 
+  function recordCoalescedHistory(key: string, delay = 1000) {
+    const now = Date.now();
+    const lastRecordedAt = coalescedHistoryRef.current[key] ?? 0;
+
+    if (now - lastRecordedAt < delay) {
+      return;
+    }
+
+    coalescedHistoryRef.current[key] = now;
+    recordHistory();
+  }
+
+  function updateComponentWithHistory(
+    id: string,
+    patch: Partial<ResumeComponent>,
+    action: "general" | "textAlign" = "general",
+  ) {
+    recordHistory(action);
+    updateComponent(id, patch);
+  }
+
+  function updateComponentWithCoalescedHistory(
+    id: string,
+    patch: Partial<ResumeComponent>,
+    key: string,
+  ) {
+    recordCoalescedHistory(key);
+    updateComponent(id, patch);
+  }
+
   function undoLastChange() {
     const previous = historyRef.current.at(-1);
     if (!previous) {
@@ -366,6 +397,7 @@ export function EditorShell({ project }: EditorShellProps) {
 
     historyRef.current = historyRef.current.slice(0, -1);
     historyActionRef.current = historyActionRef.current.slice(0, -1);
+    coalescedHistoryRef.current = {};
     replaceProject(previous);
     setSelectedComponentIds([]);
   }
@@ -2059,11 +2091,26 @@ export function EditorShell({ project }: EditorShellProps) {
                     }
                     onResizeStart={recordHistory}
                     onInlineTextChange={(content) =>
-                      updateComponent(component.id, { content })
+                      updateComponentWithCoalescedHistory(
+                        component.id,
+                        { content },
+                        `inline-text:${component.id}`,
+                      )
                     }
                     onOpenPopup={() => setOpenPopup(component.id)}
                     interactionScale={canvasScale}
-                    onUpdate={(patch) => updateComponent(component.id, patch)}
+                    onUpdate={(patch) => {
+                      if (patch.content || patch.props?.tableData) {
+                        updateComponentWithCoalescedHistory(
+                          component.id,
+                          patch,
+                          `component-content:${component.id}`,
+                        );
+                        return;
+                      }
+
+                      updateComponent(component.id, patch);
+                    }}
                   />
                 ))}
                 {!guidePopupId ? (
@@ -2083,9 +2130,24 @@ export function EditorShell({ project }: EditorShellProps) {
                   onDelete={removeComponent}
                   onResize={resizeComponent}
                   onInlineTextChange={(id, content) =>
-                    updateComponent(id, { content })
+                    updateComponentWithCoalescedHistory(
+                      id,
+                      { content },
+                      `popup-inline-text:${id}`,
+                    )
                   }
-                  onUpdateComponent={updateComponent}
+                  onUpdateComponent={(id, patch) => {
+                    if (patch.content || patch.props?.tableData) {
+                      updateComponentWithCoalescedHistory(
+                        id,
+                        patch,
+                        `popup-component-content:${id}`,
+                      );
+                      return;
+                    }
+
+                    updateComponent(id, patch);
+                  }}
                   guideLines={guidePopupId === popupComponent.id ? guideLines : []}
                   spacingGuides={guidePopupId === popupComponent.id ? spacingGuides : []}
                 />
@@ -2117,17 +2179,23 @@ export function EditorShell({ project }: EditorShellProps) {
           <PropertyPanel
             components={components}
             selectedComponent={selectedComponent}
-            onUpdate={updateComponent}
+            onUpdate={updateComponentWithHistory}
             onUpload={uploadMedia}
             project={editorProject}
-            onSetNavigationMode={setNavigationMode}
+            onSetNavigationMode={(navigationMode) => {
+              recordHistory();
+              setNavigationMode(navigationMode);
+            }}
             canvasBackground={canvasBackground}
-            onUpdateCanvasBackground={updateCanvasBackground}
+            onUpdateCanvasBackground={(color) => {
+              recordCoalescedHistory("canvas-background", 700);
+              updateCanvasBackground(color);
+            }}
             isImageCropEditing={activeCropEditingId === selectedComponent?.id}
             onToggleImageCrop={(id) =>
               setCropEditingId((currentId) => (currentId === id ? null : id))
             }
-            onRecordTextAlignHistory={() => recordHistory("textAlign")}
+            onRecordTextAlignHistory={() => undefined}
             onDelete={(id) => {
               if (lockedComponentIds.has(id)) {
                 return;
