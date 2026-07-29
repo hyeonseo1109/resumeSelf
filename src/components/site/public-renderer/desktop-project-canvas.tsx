@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { ResumeProject } from "@/types/project";
 import {
   getCanvasBackgroundCss,
@@ -25,25 +26,44 @@ export function DesktopProjectCanvas({
   isScrollMode: boolean;
   onOpenPopup: (id: string) => void;
 }) {
+  const wrapperRef = useRef<HTMLElement | null>(null);
+  const [scale, setScale] = useState(1);
   const canvasBackground = getCanvasBackgroundCss(
     getCanvasBackgroundStyle(pageLayouts[0]?.page),
   );
 
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) {
+      return;
+    }
+
+    function updateScale() {
+      const availableWidth = wrapper?.clientWidth ?? PUBLIC_CANVAS_WIDTH;
+      setScale(Math.min(1, availableWidth / PUBLIC_CANVAS_WIDTH));
+    }
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <section
-      className="relative mx-auto hidden px-0 lg:block"
+      ref={wrapperRef}
+      className="relative mx-auto block w-full max-w-[840px] px-0"
       style={{
-        width: PUBLIC_CANVAS_WIDTH,
-        minHeight: canvasHeight,
-        background: canvasBackground,
+        height: canvasHeight * scale,
       }}
     >
       <div
-        className="relative"
+        className="relative origin-top-left shadow-sm ring-1 ring-zinc-200"
         style={{
           width: PUBLIC_CANVAS_WIDTH,
           minHeight: canvasHeight,
           background: canvasBackground,
+          transform: `scale(${scale})`,
         }}
       >
         {isScrollMode

@@ -5,12 +5,17 @@ import {
   getDividerStyle,
   getImageMediaStyle,
   getJustifyContentFromTextAlign,
+  getTextStyle,
   withAlpha,
 } from "@/features/editor/view-helpers";
 import { getTableGridStyle, parseTableData } from "@/features/editor/table";
 import { richTextToPlainText, sanitizeRichTextHtml } from "@/lib/utils/rich-text";
 import type { ResumeComponent } from "@/types/project";
 import { getMobileComponentHeight, normalizeAnchor } from "./layout";
+
+function sanitizeLinkLabelHtml(value: string) {
+  return sanitizeRichTextHtml(value).replace(/<\/?a\b[^>]*>/gi, "");
+}
 
 export function PublicComponent({
   component,
@@ -30,6 +35,7 @@ export function PublicComponent({
   const mobileHeight = getMobileComponentHeight(component);
   const preserveRatioOnMobile = mobile && (component.type === "image" || component.type === "video");
   const borderRadius = Number(component.props.borderRadius ?? 6);
+  const textStyle = getTextStyle(component);
 
   return (
     <div
@@ -53,9 +59,9 @@ export function PublicComponent({
     >
       {component.type === "text" || component.type === "textbox" ? (
         <div
-          className="h-full w-full whitespace-pre-wrap wrap-break-words p-2"
+          className="h-full w-full overflow-hidden whitespace-pre-wrap break-words p-2"
           style={{
-            ...(component.props as CSSProperties),
+            ...textStyle,
             borderRadius,
             backgroundColor: component.props.backgroundColor
               ? withAlpha(String(component.props.backgroundColor), Number(component.props.backgroundOpacity ?? 100))
@@ -159,15 +165,18 @@ export function PublicComponent({
           href={String(component.props.href ?? "#")}
           target="_blank"
           rel="noreferrer"
-          className="flex h-full w-full items-center border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
+          className="flex h-full w-full min-w-0 items-center overflow-hidden border border-zinc-300 bg-white px-4 py-2 text-zinc-900 underline-offset-4 hover:underline"
           style={{
-            textAlign: String(component.props.textAlign ?? "left") as CSSProperties["textAlign"],
+            ...textStyle,
             justifyContent: getJustifyContentFromTextAlign(component.props.textAlign),
             borderRadius,
             backgroundColor: withAlpha(String(component.props.backgroundColor ?? "#ffffff"), Number(component.props.backgroundOpacity ?? 100)),
             color: String(component.props.color ?? "#18181b"),
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
+            whiteSpace: "normal",
           }}
-          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "링크") }}
+          dangerouslySetInnerHTML={{ __html: sanitizeLinkLabelHtml(component.content ?? "링크") }}
         />
       ) : component.type === "popup" ? (
         <button

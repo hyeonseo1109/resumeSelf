@@ -19,6 +19,10 @@ import {
 import { getTableGridStyle, parseTableData } from "@/features/editor/table";
 import { sanitizeRichTextHtml } from "@/lib/utils/rich-text";
 
+function sanitizeLinkLabelHtml(value: string) {
+  return sanitizeRichTextHtml(value).replace(/<\/?a\b[^>]*>/gi, "");
+}
+
 export function createPdfExportNode({
   project,
   activePage,
@@ -213,7 +217,14 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   }
 
   if (component.type === "table") {
-    Object.assign(frame.style, getTableGridStyle(component));
+    const tableStyle = getTableGridStyle(component);
+    frame.style.display = "grid";
+    frame.style.gridTemplateColumns = String(tableStyle.gridTemplateColumns ?? "");
+    frame.style.gridTemplateRows = String(tableStyle.gridTemplateRows ?? "");
+    frame.style.borderRadius = String(tableStyle.borderRadius ?? frame.style.borderRadius);
+    frame.style.overflow = "hidden";
+    frame.style.border = String(tableStyle.border ?? "");
+    frame.style.background = String(tableStyle.backgroundColor ?? "#ffffff");
     parseTableData(component).forEach((row, rowIndex, rows) => {
       row.forEach((cell, colIndex) => {
         const cellNode = document.createElement("div");
@@ -325,7 +336,11 @@ function createPdfComponent(component: ResumeComponent, top: number) {
       Number(component.props.backgroundOpacity ?? 100),
     );
     frame.style.textDecoration = "underline";
-    frame.innerHTML = sanitizeRichTextHtml(component.content ?? "링크");
+    frame.style.overflowWrap = "anywhere";
+    frame.style.wordBreak = "break-word";
+    frame.style.whiteSpace = "normal";
+    frame.style.padding = "8px 16px";
+    frame.innerHTML = sanitizeLinkLabelHtml(component.content ?? "링크");
     return frame;
   }
 

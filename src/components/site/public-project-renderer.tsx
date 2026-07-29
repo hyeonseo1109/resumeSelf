@@ -2,10 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import {
-  getCanvasBackgroundCss,
-  getCanvasBackgroundStyle,
-} from "@/features/editor/canvas-background";
 import type { ResumePage, ResumeProject } from "@/types/project";
 import { DesktopProjectCanvas } from "./public-renderer/desktop-project-canvas";
 import {
@@ -13,7 +9,6 @@ import {
   getPageLayouts,
   getRenderedComponents,
 } from "./public-renderer/layout";
-import { MobileProjectView } from "./public-renderer/mobile-project-view";
 import { PublicPopupOverlay } from "./public-renderer/public-popup-overlay";
 import { PublicToc } from "./public-renderer/public-toc";
 
@@ -47,14 +42,10 @@ export function PublicProjectRenderer({
     ? allComponents.filter((component) => component.props.popupId === openPopupId)
     : [];
   const canvasHeight = getCanvasHeight(pageLayouts);
-  const pageBackground = getCanvasBackgroundCss(
-    getCanvasBackgroundStyle(page ?? project.pages[0]),
-  );
 
   return (
     <main
-      className="min-h-screen overflow-x-hidden text-zinc-950"
-      style={{ background: pageBackground }}
+      className="min-h-screen overflow-x-hidden bg-white text-zinc-950"
     >
       <header className="mx-auto flex min-h-16 w-full max-w-[920px] items-center justify-between gap-3 px-3 py-3 sm:px-4">
         {isScrollMode ? (
@@ -88,12 +79,6 @@ export function PublicProjectRenderer({
           </nav>
         )}
       </header>
-      <MobileProjectView
-        project={project}
-        pageLayouts={pageLayouts}
-        isScrollMode={isScrollMode}
-        onOpenPopup={setOpenPopupId}
-      />
       <DesktopProjectCanvas
         project={project}
         pageLayouts={pageLayouts}
