@@ -50,6 +50,70 @@ function isComponentLocked(component: ResumeComponent) {
   return component.props.locked === true;
 }
 
+function getPageComponents(page: ResumeProject["pages"][number]) {
+  return page.sections[0]?.components ?? [];
+}
+
+function getLeadingSpacersForPreviousPage(
+  components: ResumeComponent[],
+) {
+  const firstContentY = Math.min(
+    ...components
+      .filter((component) => component.type !== "spacer" && !component.props.popupId)
+      .map((component) => component.y),
+  );
+  const threshold = Number.isFinite(firstContentY) ? firstContentY : 0;
+
+  return components.filter(
+    (component) =>
+      component.type === "spacer" &&
+      !component.props.popupId &&
+      component.y <= threshold,
+  );
+}
+
+function appendSpacersToPageBottom(
+  page: ResumeProject["pages"][number],
+  spacers: ResumeComponent[],
+) {
+  if (spacers.length === 0) {
+    return page;
+  }
+
+  const [firstSection, ...restSections] = page.sections;
+  if (!firstSection) {
+    return page;
+  }
+
+  const existingComponents = firstSection.components;
+  const bottomY = Math.max(
+    0,
+    ...existingComponents
+      .filter((component) => !component.props.popupId)
+      .map((component) => component.y + component.height),
+  );
+  let nextY = bottomY;
+  const movedSpacers = spacers.map((spacer) => {
+    const movedSpacer = {
+      ...spacer,
+      y: nextY,
+    };
+    nextY += spacer.height;
+    return movedSpacer;
+  });
+
+  return {
+    ...page,
+    sections: [
+      {
+        ...firstSection,
+        components: [...existingComponents, ...movedSpacers],
+      },
+      ...restSections,
+    ],
+  };
+}
+
 interface EditorState {
   project: ResumeProject;
   activePageId: string;
@@ -550,12 +614,29 @@ export function createEditorStore(initialProject: ResumeProject) {
     removeNavigationPage: (id) =>
       set((state) => {
         const item = state.project.navigation.find((nav) => nav.id === id);
+        const removedPageIndex = item
+          ? state.project.pages.findIndex((page) => page.slug === item.target)
+          : -1;
+        const removedPage =
+          removedPageIndex >= 0 ? state.project.pages[removedPageIndex] : null;
+        const previousPage =
+          removedPageIndex > 0 ? state.project.pages[removedPageIndex - 1] : null;
+        const spacersToKeep =
+          state.project.navigationMode === "scroll" && removedPage && previousPage
+            ? getLeadingSpacersForPreviousPage(getPageComponents(removedPage))
+            : [];
         const remainingNavigation = state.project.navigation
           .filter((nav) => nav.id !== id)
           .map((nav, order) => ({ ...nav, order }));
         const remainingPages =
           item && state.project.pages.length > 1
-            ? state.project.pages.filter((page) => page.slug !== item.target)
+            ? state.project.pages
+                .filter((page) => page.slug !== item.target)
+                .map((page) =>
+                  previousPage && page.id === previousPage.id
+                    ? appendSpacersToPageBottom(page, spacersToKeep)
+                    : page,
+                )
             : state.project.pages;
         const activePageExists = remainingPages.some((page) => page.id === state.activePageId);
 

@@ -2250,6 +2250,14 @@ export function EditorShell({ project }: EditorShellProps) {
                   : (editorProject.navigation[0]?.target ?? "")
               }
               onSelect={(target) => handleHeaderNavigation(target)}
+              onRename={(id, label) => {
+                recordHistory();
+                updateNavigationItem(id, { label });
+              }}
+              onDelete={(id) => {
+                recordHistory();
+                removeNavigationPage(id);
+              }}
               placement="rail"
             />
           </aside>
