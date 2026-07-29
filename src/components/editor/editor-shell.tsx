@@ -77,6 +77,7 @@ import {
   type GuideLine,
   type SpacingGuide,
   clamp,
+  getAlignItemsFromVerticalAlign,
   getComponentLayer,
   getDividerStyle,
   getImageMediaStyle,
@@ -85,6 +86,7 @@ import {
   hasTypography,
   normalizeAnchor,
   normalizeFontWeight,
+  RICH_TEXT_COMPONENT_PADDING,
   withAlpha,
 } from "@/features/editor/view-helpers";
 import { cn } from "@/lib/utils/cn";
@@ -2970,8 +2972,10 @@ function CanvasComponent({
       ) : null}
       {component.type === "text" || component.type === "textbox" ? (
         <div
-          className="h-full w-full overflow-visible p-3"
+          className="flex h-full w-full overflow-visible"
           style={{
+            alignItems: getAlignItemsFromVerticalAlign(component.props.verticalAlign),
+            padding: RICH_TEXT_COMPONENT_PADDING,
             backgroundColor: String(
               component.props.backgroundColor
                 ? withAlpha(
@@ -2987,6 +2991,7 @@ function CanvasComponent({
             readOnly={preview}
             value={component.content ?? ""}
             baseStyle={textStyle}
+            className="!h-auto min-h-0 w-full"
             onFocus={() => onSelect()}
             onChange={onInlineTextChange}
           />
@@ -3129,9 +3134,11 @@ function CanvasComponent({
         </button>
       ) : component.type === "link" && !preview ? (
         <div
-          className="h-full w-full border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 underline-offset-4"
+          className="flex h-full w-full border border-zinc-300 bg-white text-sm font-medium text-zinc-900 underline-offset-4"
           style={{
             ...textStyle,
+            alignItems: getAlignItemsFromVerticalAlign(component.props.verticalAlign),
+            padding: RICH_TEXT_COMPONENT_PADDING,
             borderRadius,
             backgroundColor: String(
               withAlpha(
@@ -3148,12 +3155,13 @@ function CanvasComponent({
             baseStyle={{
               ...textStyle,
               display: "flex",
-              minHeight: "100%",
+              minHeight: 0,
               alignItems: "center",
               justifyContent: getJustifyContentFromTextAlign(
                 component.props.textAlign,
               ),
             }}
+            className="!h-auto min-h-0 w-full"
             onFocus={() => onSelect()}
             onChange={onInlineTextChange}
           />
@@ -3163,13 +3171,15 @@ function CanvasComponent({
           href={String(component.props.href ?? "#")}
           target="_blank"
           rel="noreferrer"
-          className="flex h-full w-full min-w-0 items-center overflow-hidden border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
+          className="flex h-full w-full min-w-0 overflow-hidden border border-zinc-300 bg-white text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
           style={{
             ...textStyle,
             borderRadius,
+            alignItems: getAlignItemsFromVerticalAlign(component.props.verticalAlign),
             justifyContent: getJustifyContentFromTextAlign(
               component.props.textAlign,
             ),
+            padding: RICH_TEXT_COMPONENT_PADDING,
             backgroundColor: String(
               withAlpha(
                 String(component.props.backgroundColor ?? "#ffffff"),
@@ -3180,7 +3190,11 @@ function CanvasComponent({
           }}
         >
           <span
-            className="resume-link-content"
+            className="resume-link-content resume-public-rich-text"
+            style={{
+              "--resume-line-height": `${Number(component.props.lineHeight ?? 150)}%`,
+              "--resume-letter-spacing": `${Number(component.props.letterSpacing ?? 0)}px`,
+            } as CSSProperties}
             dangerouslySetInnerHTML={{
               __html: sanitizeRichTextHtml(component.content ?? "링크").replace(
                 /<\/?a\b[^>]*>/gi,
@@ -4781,28 +4795,51 @@ function PropertyPanel({
                       {selectedComponent.type === "text" ||
                       selectedComponent.type === "textbox" ||
                       selectedComponent.type === "link" ? (
-                        <label className="grid gap-1">
-                          <span className="text-zinc-500">Text Align</span>
-                          <select
-                            value={String(
-                              selectedComponent.props.textAlign ?? "left",
-                            )}
-                            onChange={(event) => {
-                              onRecordTextAlignHistory();
-                              onUpdate(selectedComponent.id, {
-                                props: {
-                                  ...selectedComponent.props,
-                                  textAlign: event.target.value,
-                                },
-                              });
-                            }}
-                            className="h-9 rounded-md border border-zinc-200 px-2"
-                          >
-                            <option value="left">좌측 정렬</option>
-                            <option value="center">가운데 정렬</option>
-                            <option value="right">우측 정렬</option>
-                          </select>
-                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="grid gap-1">
+                            <span className="text-zinc-500">Text Align</span>
+                            <select
+                              value={String(
+                                selectedComponent.props.textAlign ?? "left",
+                              )}
+                              onChange={(event) => {
+                                onRecordTextAlignHistory();
+                                onUpdate(selectedComponent.id, {
+                                  props: {
+                                    ...selectedComponent.props,
+                                    textAlign: event.target.value,
+                                  },
+                                });
+                              }}
+                              className="h-9 rounded-md border border-zinc-200 px-2"
+                            >
+                              <option value="left">좌측</option>
+                              <option value="center">가운데</option>
+                              <option value="right">우측</option>
+                            </select>
+                          </label>
+                          <label className="grid gap-1">
+                            <span className="text-zinc-500">Vertical</span>
+                            <select
+                              value={String(
+                                selectedComponent.props.verticalAlign ?? "top",
+                              )}
+                              onChange={(event) =>
+                                onUpdate(selectedComponent.id, {
+                                  props: {
+                                    ...selectedComponent.props,
+                                    verticalAlign: event.target.value,
+                                  },
+                                })
+                              }
+                              className="h-9 rounded-md border border-zinc-200 px-2"
+                            >
+                              <option value="top">상단</option>
+                              <option value="middle">가운데</option>
+                              <option value="bottom">하단</option>
+                            </select>
+                          </label>
+                        </div>
                       ) : null}
                       <div className="grid grid-cols-2 gap-2">
                         <NumberField

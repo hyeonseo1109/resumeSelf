@@ -32,6 +32,7 @@ export const FONT_WEIGHT_OPTIONS = [
 
 export const PDF_PAGE_WIDTH = 840;
 export const PDF_PAGE_HEIGHT = 1188;
+export const RICH_TEXT_COMPONENT_PADDING = "10px 16px";
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -78,6 +79,20 @@ export function getJustifyContentFromTextAlign(value: unknown): CSSProperties["j
   }
 
   if (textAlign === "right") {
+    return "flex-end";
+  }
+
+  return "flex-start";
+}
+
+export function getAlignItemsFromVerticalAlign(value: unknown): CSSProperties["alignItems"] {
+  const verticalAlign = String(value ?? "top");
+
+  if (verticalAlign === "middle") {
+    return "center";
+  }
+
+  if (verticalAlign === "bottom") {
     return "flex-end";
   }
 

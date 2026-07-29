@@ -3,9 +3,11 @@
 import type { CSSProperties } from "react";
 import {
   getDividerStyle,
+  getAlignItemsFromVerticalAlign,
   getImageMediaStyle,
   getJustifyContentFromTextAlign,
   getTextStyle,
+  RICH_TEXT_COMPONENT_PADDING,
   withAlpha,
 } from "@/features/editor/view-helpers";
 import { getTableGridStyle, parseTableData } from "@/features/editor/table";
@@ -63,17 +65,25 @@ export function PublicComponent({
     >
       {component.type === "text" || component.type === "textbox" ? (
         <div
-          className="resume-public-rich-text h-full w-full overflow-hidden whitespace-pre-wrap break-words p-2"
+          className="flex h-full w-full overflow-hidden whitespace-pre-wrap break-words"
           style={{
-            ...textStyle,
-            ...richTextCssVariables,
             borderRadius,
+            alignItems: getAlignItemsFromVerticalAlign(component.props.verticalAlign),
+            padding: RICH_TEXT_COMPONENT_PADDING,
             backgroundColor: component.props.backgroundColor
               ? withAlpha(String(component.props.backgroundColor), Number(component.props.backgroundOpacity ?? 100))
               : undefined,
           }}
-          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "") }}
-        />
+        >
+          <div
+            className="resume-public-rich-text w-full min-w-0"
+            style={{
+              ...textStyle,
+              ...richTextCssVariables,
+            }}
+            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "") }}
+          />
+        </div>
       ) : component.type === "divider" ? (
         <div className="flex h-full w-full items-center justify-center">
           <span style={getDividerStyle(component)} />
@@ -170,10 +180,12 @@ export function PublicComponent({
           href={String(component.props.href ?? "#")}
           target="_blank"
           rel="noreferrer"
-          className="flex h-full w-full min-w-0 items-center overflow-hidden border border-zinc-300 bg-white px-4 py-2 text-zinc-900 underline-offset-4 hover:underline"
+          className="flex h-full w-full min-w-0 overflow-hidden border border-zinc-300 bg-white text-zinc-900 underline-offset-4 hover:underline"
           style={{
             ...textStyle,
+            alignItems: getAlignItemsFromVerticalAlign(component.props.verticalAlign),
             justifyContent: getJustifyContentFromTextAlign(component.props.textAlign),
+            padding: RICH_TEXT_COMPONENT_PADDING,
             borderRadius,
             backgroundColor: withAlpha(String(component.props.backgroundColor ?? "#ffffff"), Number(component.props.backgroundOpacity ?? 100)),
             color: String(component.props.color ?? "#18181b"),

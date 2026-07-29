@@ -6,6 +6,8 @@ import {
 import {
   FONT_OPTIONS,
   PDF_PAGE_WIDTH,
+  RICH_TEXT_COMPONENT_PADDING,
+  getAlignItemsFromVerticalAlign,
   getComponentLayer,
   getDividerStyle,
   getImageMediaStyle,
@@ -214,7 +216,11 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   }
 
   if (component.type === "text" || component.type === "textbox") {
-    frame.style.padding = "8px";
+    frame.style.display = "flex";
+    frame.style.alignItems = String(
+      getAlignItemsFromVerticalAlign(component.props.verticalAlign),
+    );
+    frame.style.padding = RICH_TEXT_COMPONENT_PADDING;
     frame.style.whiteSpace = "pre-wrap";
     frame.style.background = component.props.backgroundColor
       ? withAlpha(
@@ -222,8 +228,15 @@ function createPdfComponent(component: ResumeComponent, top: number) {
           Number(component.props.backgroundOpacity ?? 100),
         )
       : "transparent";
-    frame.innerHTML = sanitizeRichTextHtml(component.content ?? "");
-    applyRichTextSpacing(frame, component);
+    const content = document.createElement("div");
+    content.style.width = "100%";
+    content.style.minWidth = "0";
+    content.style.whiteSpace = "pre-wrap";
+    content.style.overflowWrap = "anywhere";
+    content.style.wordBreak = "break-word";
+    content.innerHTML = sanitizeRichTextHtml(component.content ?? "");
+    applyRichTextSpacing(content, component);
+    frame.appendChild(content);
     return frame;
   }
 
@@ -358,7 +371,9 @@ function createPdfComponent(component: ResumeComponent, top: number) {
 
   if (component.type === "link") {
     frame.style.display = "flex";
-    frame.style.alignItems = "center";
+    frame.style.alignItems = String(
+      getAlignItemsFromVerticalAlign(component.props.verticalAlign),
+    );
     frame.style.justifyContent = String(
       getJustifyContentFromTextAlign(component.props.textAlign),
     );
@@ -371,7 +386,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     frame.style.overflowWrap = "anywhere";
     frame.style.wordBreak = "break-word";
     frame.style.whiteSpace = "normal";
-    frame.style.padding = "8px 16px";
+    frame.style.padding = RICH_TEXT_COMPONENT_PADDING;
     const label = document.createElement("span");
     label.style.display = "block";
     label.style.minWidth = "0";
