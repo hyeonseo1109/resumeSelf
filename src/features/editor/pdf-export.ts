@@ -50,9 +50,27 @@ function applyRichTextSpacing(element: HTMLElement, component: ResumeComponent) 
 
   element.style.lineHeight = lineHeight;
   element.style.letterSpacing = letterSpacing;
-  element.querySelectorAll<HTMLElement>("*").forEach((child) => {
-    child.style.lineHeight = lineHeight;
-    child.style.letterSpacing = letterSpacing;
+
+  element.querySelectorAll<HTMLElement>("p").forEach((paragraph, index, paragraphs) => {
+    const explicitMarginTop = paragraph.style.marginTop;
+    const paragraphLineHeight = paragraph.style.lineHeight || lineHeight;
+    const paragraphLetterSpacing = paragraph.style.letterSpacing || letterSpacing;
+    paragraph.style.margin = "0";
+    paragraph.style.lineHeight = paragraphLineHeight;
+    paragraph.style.letterSpacing = paragraphLetterSpacing;
+
+    if (index > 0) {
+      paragraph.style.marginTop = explicitMarginTop || "0.75em";
+    }
+
+    if (index === paragraphs.length - 1) {
+      paragraph.style.marginBottom = "0";
+    }
+  });
+
+  element.querySelectorAll<HTMLElement>("span, strong, em, s, code").forEach((child) => {
+    child.style.lineHeight = child.style.lineHeight || lineHeight;
+    child.style.letterSpacing = child.style.letterSpacing || letterSpacing;
   });
 }
 
