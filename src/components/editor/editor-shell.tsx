@@ -489,6 +489,18 @@ export function EditorShell({ project }: EditorShellProps) {
   }, [presetsOpen]);
 
   useEffect(() => {
+    if (presetsLoaded || presetsLoading) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void loadPresets();
+    }, 600);
+
+    return () => window.clearTimeout(timeout);
+  }, [presetsLoaded, presetsLoading]);
+
+  useEffect(() => {
     const observedElement = scrollAreaRef.current;
     if (!observedElement) {
       return;
@@ -1237,12 +1249,11 @@ export function EditorShell({ project }: EditorShellProps) {
       throw new Error(result.error ?? "프리셋 저장에 실패했습니다.");
     }
 
-    if (!presetsLoaded) {
-      await loadPresets();
-      return;
-    }
-
-    setPresets((items) => [result.preset!, ...items]);
+    setPresets((items) => [
+      result.preset!,
+      ...items.filter((item) => item.id !== result.preset!.id),
+    ]);
+    setPresetsLoaded(true);
   }
 
   async function updatePreset(input: {
