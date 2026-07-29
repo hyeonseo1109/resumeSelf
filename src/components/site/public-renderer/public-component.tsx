@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import {
   getDividerStyle,
   getImageMediaStyle,
+  getJustifyContentFromTextAlign,
   withAlpha,
 } from "@/features/editor/view-helpers";
 import { getTableGridStyle, parseTableData } from "@/features/editor/table";
@@ -132,8 +133,10 @@ export function PublicComponent({
           href={String(component.props.href ?? "#")}
           target="_blank"
           rel="noreferrer"
-          className="flex h-full w-full items-center justify-center border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
+          className="flex h-full w-full items-center border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
           style={{
+            textAlign: String(component.props.textAlign ?? "left") as CSSProperties["textAlign"],
+            justifyContent: getJustifyContentFromTextAlign(component.props.textAlign),
             borderRadius,
             backgroundColor: withAlpha(String(component.props.backgroundColor ?? "#ffffff"), Number(component.props.backgroundOpacity ?? 100)),
             color: String(component.props.color ?? "#18181b"),

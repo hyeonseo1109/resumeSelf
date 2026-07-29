@@ -140,7 +140,10 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
                   : undefined,
     props:
       type === "link"
-        ? { href: "https://example.com" }
+        ? {
+            href: "https://example.com",
+            textAlign: "left",
+          }
         : type === "textbox"
           ? {
               backgroundColor: "#ffffff",
@@ -151,6 +154,7 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
               fontWeight: 400,
               lineHeight: 150,
               letterSpacing: 0,
+              textAlign: "left",
             }
         : type === "divider"
           ? {

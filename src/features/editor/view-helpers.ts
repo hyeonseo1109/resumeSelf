@@ -66,7 +66,22 @@ export function getTextStyle(component: ResumeComponent): CSSProperties {
     fontFamily: String(component.props.fontFamily ?? FONT_OPTIONS[0].value),
     lineHeight: `${Number(component.props.lineHeight ?? 150)}%`,
     letterSpacing: `${Number(component.props.letterSpacing ?? 0)}px`,
+    textAlign: String(component.props.textAlign ?? "left") as CSSProperties["textAlign"],
   };
+}
+
+export function getJustifyContentFromTextAlign(value: unknown): CSSProperties["justifyContent"] {
+  const textAlign = String(value ?? "left");
+
+  if (textAlign === "center") {
+    return "center";
+  }
+
+  if (textAlign === "right") {
+    return "flex-end";
+  }
+
+  return "flex-start";
 }
 
 export function normalizeFontWeight(value: unknown) {

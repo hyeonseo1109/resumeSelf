@@ -67,6 +67,7 @@ import {
   getComponentLayer,
   getDividerStyle,
   getImageMediaStyle,
+  getJustifyContentFromTextAlign,
   getTextStyle,
   hasTypography,
   normalizeAnchor,
@@ -387,6 +388,43 @@ export function EditorShell({ project }: EditorShellProps) {
     );
   }
 
+  function alignSelectedTextComponents(textAlign: "left" | "center" | "right") {
+    const ids =
+      selectedComponentIds.length > 0
+        ? selectedComponentIds
+        : selectedComponentId
+          ? [selectedComponentId]
+          : [];
+    const editableTextIds = ids.filter((id) => {
+      const component = components.find((item) => item.id === id);
+      return (
+        component?.type === "text" ||
+        component?.type === "textbox" ||
+        component?.type === "link"
+      );
+    });
+
+    if (editableTextIds.length === 0) {
+      return false;
+    }
+
+    recordHistory();
+    editableTextIds.forEach((id) => {
+      const component = components.find((item) => item.id === id);
+      if (!component) {
+        return;
+      }
+
+      updateComponent(id, {
+        props: {
+          ...component.props,
+          textAlign,
+        },
+      });
+    });
+    return true;
+  }
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const isModifierPressed = event.metaKey || event.ctrlKey;
@@ -396,6 +434,16 @@ export function EditorShell({ project }: EditorShellProps) {
         event.preventDefault();
         saveProjectRef.current();
         return;
+      }
+
+      if (isModifierPressed && ["l", "r", "e", "m"].includes(key)) {
+        const textAlign =
+          key === "l" ? "left" : key === "r" ? "right" : "center";
+
+        if (alignSelectedTextComponents(textAlign)) {
+          event.preventDefault();
+          return;
+        }
       }
 
       if (mode !== "edit" || isEditableTarget(event.target)) {
@@ -2686,7 +2734,9 @@ function CanvasComponent({
               display: "flex",
               minHeight: "100%",
               alignItems: "center",
-              justifyContent: "center",
+              justifyContent: getJustifyContentFromTextAlign(
+                component.props.textAlign,
+              ),
             }}
             onFocus={() => onSelect()}
             onChange={onInlineTextChange}
@@ -2697,10 +2747,13 @@ function CanvasComponent({
           href={String(component.props.href ?? "#")}
           target="_blank"
           rel="noreferrer"
-          className="flex h-full w-full items-center justify-center border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
+          className="flex h-full w-full items-center border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
           style={{
             ...textStyle,
             borderRadius,
+            justifyContent: getJustifyContentFromTextAlign(
+              component.props.textAlign,
+            ),
             backgroundColor: String(
               withAlpha(
                 String(component.props.backgroundColor ?? "#ffffff"),
@@ -3569,6 +3622,31 @@ function PropertyPanel({
                           ))}
                         </select>
                       </label>
+                      {selectedComponent.type === "text" ||
+                      selectedComponent.type === "textbox" ||
+                      selectedComponent.type === "link" ? (
+                        <label className="grid gap-1">
+                          <span className="text-zinc-500">Text Align</span>
+                          <select
+                            value={String(
+                              selectedComponent.props.textAlign ?? "left",
+                            )}
+                            onChange={(event) =>
+                              onUpdate(selectedComponent.id, {
+                                props: {
+                                  ...selectedComponent.props,
+                                  textAlign: event.target.value,
+                                },
+                              })
+                            }
+                            className="h-9 rounded-md border border-zinc-200 px-2"
+                          >
+                            <option value="left">좌측 정렬</option>
+                            <option value="center">가운데 정렬</option>
+                            <option value="right">우측 정렬</option>
+                          </select>
+                        </label>
+                      ) : null}
                       <div className="grid grid-cols-2 gap-2">
                         <NumberField
                           label="Line Height (%)"

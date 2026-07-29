@@ -5,6 +5,7 @@ import {
   getComponentLayer,
   getDividerStyle,
   getImageMediaStyle,
+  getJustifyContentFromTextAlign,
   withAlpha,
 } from "./view-helpers";
 import { getTableGridStyle, parseTableData } from "@/features/editor/table";
@@ -158,6 +159,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   );
   frame.style.lineHeight = `${Number(component.props.lineHeight ?? 150)}%`;
   frame.style.letterSpacing = `${Number(component.props.letterSpacing ?? 0)}px`;
+  frame.style.textAlign = String(component.props.textAlign ?? "left");
   if (component.type !== "divider" && component.props.backgroundColor) {
     frame.style.background = withAlpha(
       String(component.props.backgroundColor),
@@ -279,7 +281,9 @@ function createPdfComponent(component: ResumeComponent, top: number) {
   if (component.type === "link") {
     frame.style.display = "flex";
     frame.style.alignItems = "center";
-    frame.style.justifyContent = "center";
+    frame.style.justifyContent = String(
+      getJustifyContentFromTextAlign(component.props.textAlign),
+    );
     frame.style.border = "1px solid #d4d4d8";
     frame.style.background = withAlpha(
       String(component.props.backgroundColor ?? "#ffffff"),
