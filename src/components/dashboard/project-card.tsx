@@ -105,7 +105,7 @@ export function ProjectCard({
           <form
             action={updateTitleAction}
             onSubmit={handleTitleSubmit}
-            className="flex max-w-sm items-center gap-2"
+            className="group/title flex max-w-sm items-center gap-2"
           >
             <input type="hidden" name="projectId" value={project.id} />
             <input
@@ -118,7 +118,7 @@ export function ProjectCard({
             <button
               type="submit"
               disabled={!canEdit}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-300"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 hover:bg-[#eeeeef] group-focus-within/title:bg-[#eeeeef] disabled:cursor-not-allowed disabled:text-zinc-300"
               title="프로젝트 이름 저장"
             >
               <Pencil className="size-4" />
