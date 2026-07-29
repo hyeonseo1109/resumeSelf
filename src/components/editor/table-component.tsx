@@ -2,11 +2,14 @@
 
 import type {
   ClipboardEvent as ReactClipboardEvent,
+  KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   clearTableRange,
+  deleteTableCols,
+  deleteTableRows,
   extractTableRange,
   getSelectedTableCell,
   getSelectedTableRange,
@@ -63,6 +66,7 @@ export function TableComponent({
     row: number;
     col: number;
   } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const data = parseTableData(component);
   const rows = getTableRows(component);
   const cols = getTableCols(component);
@@ -70,6 +74,23 @@ export function TableComponent({
   const selectedRange = getSelectedTableRange(component);
   const rowHeights = getTableRowHeights(component);
   const colWidths = getTableColWidths(component);
+
+  useEffect(() => {
+    if (!menu) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (menuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setMenu(null);
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, [menu]);
 
   function selectCell(row: number, col: number) {
     onSelect();
@@ -177,6 +198,30 @@ export function TableComponent({
     });
   }
 
+  function clearSelectedCells() {
+    onUpdate({
+      props: {
+        ...component.props,
+        tableData: serializeTableData(clearTableRange(data, selectedRange)),
+      },
+    });
+  }
+
+  function handleTableKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (
+      preview ||
+      !isTableSelected ||
+      !isMultiCellRange(selectedRange) ||
+      (event.key !== "Delete" && event.key !== "Backspace")
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    clearSelectedCells();
+  }
+
   function pasteSelectedRange(event: ReactClipboardEvent<HTMLDivElement>) {
     if (preview || !isTableSelected) {
       return;
@@ -259,6 +304,79 @@ export function TableComponent({
         tableData: serializeTableData(nextData),
         selectedCellRow: Math.min(selectedCell.row, rows - 1),
         selectedCellCol: index,
+      },
+    });
+    setMenu(null);
+  }
+
+  function removeSelectedRows() {
+    const nextData = deleteTableRows(
+      data,
+      selectedRange.startRow,
+      selectedRange.endRow,
+    );
+    const nextRowHeights = rowHeights.filter(
+      (_, rowIndex) =>
+        rowIndex < selectedRange.startRow || rowIndex > selectedRange.endRow,
+    );
+    const safeRowHeights =
+      nextRowHeights.length > 0
+        ? nextRowHeights
+        : [Math.max(42, component.height)];
+    const nextHeight = safeRowHeights.reduce(
+      (total, height) => total + height,
+      0,
+    );
+
+    onUpdate({
+      height: nextHeight,
+      props: {
+        ...component.props,
+        tableRows: nextData.length,
+        tableRowHeights: serializeTableSizes(safeRowHeights),
+        tableData: serializeTableData(nextData),
+        selectedCellRow: Math.min(selectedRange.startRow, nextData.length - 1),
+        selectedCellCol: Math.min(selectedCell.col, cols - 1),
+        selectedCellStartRow: Math.min(
+          selectedRange.startRow,
+          nextData.length - 1,
+        ),
+        selectedCellStartCol: Math.min(selectedCell.col, cols - 1),
+        selectedCellEndRow: Math.min(selectedRange.startRow, nextData.length - 1),
+        selectedCellEndCol: Math.min(selectedCell.col, cols - 1),
+      },
+    });
+    setMenu(null);
+  }
+
+  function removeSelectedCols() {
+    const nextData = deleteTableCols(
+      data,
+      selectedRange.startCol,
+      selectedRange.endCol,
+    );
+    const nextColWidths = colWidths.filter(
+      (_, colIndex) =>
+        colIndex < selectedRange.startCol || colIndex > selectedRange.endCol,
+    );
+    const safeColWidths =
+      nextColWidths.length > 0 ? nextColWidths : [Math.max(72, component.width)];
+    const nextWidth = safeColWidths.reduce((total, width) => total + width, 0);
+    const nextCols = Math.max(1, nextData[0]?.length ?? 1);
+
+    onUpdate({
+      width: nextWidth,
+      props: {
+        ...component.props,
+        tableCols: nextCols,
+        tableColWidths: serializeTableSizes(safeColWidths),
+        tableData: serializeTableData(nextData),
+        selectedCellRow: Math.min(selectedCell.row, nextData.length - 1),
+        selectedCellCol: Math.min(selectedRange.startCol, nextCols - 1),
+        selectedCellStartRow: Math.min(selectedCell.row, nextData.length - 1),
+        selectedCellStartCol: Math.min(selectedRange.startCol, nextCols - 1),
+        selectedCellEndRow: Math.min(selectedCell.row, nextData.length - 1),
+        selectedCellEndCol: Math.min(selectedRange.startCol, nextCols - 1),
       },
     });
     setMenu(null);
@@ -355,6 +473,7 @@ export function TableComponent({
       onCopyCapture={copySelectedRange}
       onCutCapture={cutSelectedRange}
       onPasteCapture={pasteSelectedRange}
+      onKeyDownCapture={handleTableKeyDown}
       onContextMenu={(event) => {
         if (preview) {
           return;
@@ -484,11 +603,12 @@ export function TableComponent({
         : null}
       {menu && !preview ? (
         <div
+          ref={menuRef}
           data-editor-control="true"
-          className="absolute z-50 grid w-36 overflow-hidden rounded-md border border-zinc-200 bg-white py-1 text-xs shadow-lg"
+          className="absolute z-50 grid w-40 overflow-hidden rounded-md border border-zinc-200 bg-white py-1 text-xs shadow-lg"
           style={{
-            left: Math.min(menu.x, Math.max(0, component.width - 148)),
-            top: Math.min(menu.y, Math.max(0, component.height - 132)),
+            left: Math.min(menu.x, Math.max(0, component.width - 164)),
+            top: Math.min(menu.y, Math.max(0, component.height - 204)),
           }}
           onPointerDown={(event) => event.stopPropagation()}
           onMouseDown={(event) => event.stopPropagation()}
@@ -520,6 +640,21 @@ export function TableComponent({
             onClick={() => addCol(menu.col + 1)}
           >
             오른쪽에 열 추가
+          </button>
+          <div className="my-1 h-px bg-zinc-100" />
+          <button
+            type="button"
+            className="px-3 py-2 text-left text-red-600 hover:bg-red-50"
+            onClick={removeSelectedRows}
+          >
+            선택 행 삭제
+          </button>
+          <button
+            type="button"
+            className="px-3 py-2 text-left text-red-600 hover:bg-red-50"
+            onClick={removeSelectedCols}
+          >
+            선택 열 삭제
           </button>
         </div>
       ) : null}

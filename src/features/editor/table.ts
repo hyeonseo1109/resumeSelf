@@ -252,6 +252,26 @@ export function insertTableCol(data: TableData, index: number) {
   ]);
 }
 
+export function deleteTableRows(data: TableData, startRow: number, endRow: number) {
+  const nextData = data.filter(
+    (_, rowIndex) => rowIndex < startRow || rowIndex > endRow,
+  );
+
+  return nextData.length > 0
+    ? nextData
+    : [Array.from({ length: Math.max(1, data[0]?.length ?? 1) }, () => ({ text: "" }))];
+}
+
+export function deleteTableCols(data: TableData, startCol: number, endCol: number) {
+  return data.map((row) => {
+    const nextRow = row.filter(
+      (_, colIndex) => colIndex < startCol || colIndex > endCol,
+    );
+
+    return nextRow.length > 0 ? nextRow : [{ text: "" }];
+  });
+}
+
 export function updateTableCellText(
   data: TableData,
   row: number,
