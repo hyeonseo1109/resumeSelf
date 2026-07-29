@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { createDefaultTableData, serializeTableData } from "@/features/editor/table";
 import type { ComponentType, ResumeComponent, ResumeProject, SaveStatus } from "@/types/project";
 
 function normalizeSlug(value: string) {
@@ -82,6 +83,8 @@ function getComponentSize(type: ComponentType) {
         ? 520
         : type === "icon"
           ? 72
+        : type === "table"
+          ? 480
         : type === "section" || type === "container"
           ? 620
           : type === "popup"
@@ -96,8 +99,10 @@ function getComponentSize(type: ComponentType) {
           ? 320
         : type === "container"
           ? 220
-          : type === "icon"
+        : type === "icon"
             ? 72
+          : type === "table"
+            ? 220
           : type === "popup"
               ? 220
               : 140,
@@ -124,6 +129,8 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
               ? "링크"
               : type === "icon"
                 ? "아이콘"
+                : type === "table"
+                  ? "표"
               : type === "section"
               ? "Section"
               : type === "container"
@@ -159,6 +166,23 @@ function buildComponent(type: ComponentType, position: { x: number; y: number },
               backgroundColor: "#ffffff",
               backgroundOpacity: 0,
               borderRadius: 12,
+            }
+        : type === "table"
+          ? {
+              tableRows: 2,
+              tableCols: 2,
+              tableData: serializeTableData(createDefaultTableData(2, 2)),
+              selectedCellRow: 0,
+              selectedCellCol: 0,
+              backgroundColor: "#ffffff",
+              backgroundOpacity: 100,
+              borderColor: "#d4d4d8",
+              borderRadius: 6,
+              color: "#111827",
+              fontSize: 14,
+              fontWeight: 400,
+              lineHeight: 150,
+              letterSpacing: 0,
             }
         : type === "image"
           ? {

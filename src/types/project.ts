@@ -11,6 +11,7 @@ export type ComponentType =
   | "video"
   | "button"
   | "icon"
+  | "table"
   | "link"
   | "divider"
   | "spacer"

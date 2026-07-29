@@ -38,11 +38,22 @@ import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { RouteSwitcher } from "@/components/editor/route-switcher";
 import { ScrollToc } from "@/components/editor/scroll-toc";
 import { SiteHeader } from "@/components/editor/site-header";
+import { TableComponent } from "@/components/editor/table-component";
 import {
   createPdfExportNode,
   waitForPdfNode,
 } from "@/features/editor/pdf-export";
 import { createEditorStore } from "@/features/editor/store";
+import {
+  getSelectedTableCell,
+  getTableCols,
+  getTableRows,
+  hasTrimmedTableContent,
+  parseTableData,
+  resizeTableData,
+  serializeTableData,
+  updateTableCellBackground,
+} from "@/features/editor/table";
 import {
   FONT_OPTIONS,
   FONT_WEIGHT_OPTIONS,
@@ -1077,6 +1088,8 @@ export function EditorShell({ project }: EditorShellProps) {
             ? { width: 620, height: 220 }
             : type === "popup"
               ? { width: 320, height: 220 }
+              : type === "table"
+                ? { width: 480, height: 220 }
               : type === "textbox"
                 ? { width: 760, height: 860 }
               : type === "text"
@@ -1998,6 +2011,13 @@ function CanvasComponent({
         <div className="flex h-full w-full items-center justify-center">
           <span style={getDividerStyle(component)} />
         </div>
+      ) : component.type === "table" ? (
+        <TableComponent
+          component={component}
+          preview={preview}
+          onSelect={() => onSelect()}
+          onUpdate={onUpdate}
+        />
       ) : component.type === "image" && component.content ? (
         <div
           data-image-crop-frame="true"
@@ -2463,6 +2483,43 @@ function PropertyPanel({
     }
   }
 
+  function updateTableSize(component: ResumeComponent, rows: number, cols: number) {
+    const currentData = parseTableData(component);
+    const nextRows = clamp(Math.round(rows), 1, 50);
+    const nextCols = clamp(Math.round(cols), 1, 20);
+
+    if (
+      (nextRows < getTableRows(component) || nextCols < getTableCols(component)) &&
+      hasTrimmedTableContent(currentData, nextRows, nextCols) &&
+      !window.confirm("행/열 변경으로 기존 셀 내용이 삭제됩니다. 계속 진행할까요?")
+    ) {
+      return;
+    }
+
+    onUpdate(component.id, {
+      props: {
+        ...component.props,
+        tableRows: nextRows,
+        tableCols: nextCols,
+        tableData: serializeTableData(resizeTableData(currentData, nextRows, nextCols)),
+        selectedCellRow: Math.min(Number(component.props.selectedCellRow ?? 0), nextRows - 1),
+        selectedCellCol: Math.min(Number(component.props.selectedCellCol ?? 0), nextCols - 1),
+      },
+    });
+  }
+
+  function updateSelectedTableCellBackground(component: ResumeComponent, color: string) {
+    const { row, col } = getSelectedTableCell(component);
+    const data = parseTableData(component);
+
+    onUpdate(component.id, {
+      props: {
+        ...component.props,
+        tableData: serializeTableData(updateTableCellBackground(data, row, col, color)),
+      },
+    });
+  }
+
   return (
     <aside className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto overflow-x-hidden border-l border-zinc-200 bg-white p-4">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
@@ -2561,6 +2618,65 @@ function PropertyPanel({
             {selectedComponent.type === "text" || selectedComponent.type === "textbox" ? (
               <div className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
                 텍스트 내용과 일부 선택 스타일은 캔버스 안에서 직접 수정합니다.
+              </div>
+            ) : null}
+
+            {selectedComponent.type === "table" ? (
+              <div className="grid gap-3 rounded-md border border-zinc-200 p-3">
+                <p className="text-sm font-medium text-zinc-700">Table</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <NumberField
+                    label="Rows"
+                    value={getTableRows(selectedComponent)}
+                    min={1}
+                    max={50}
+                    onChange={(value) =>
+                      updateTableSize(
+                        selectedComponent,
+                        value,
+                        getTableCols(selectedComponent),
+                      )
+                    }
+                  />
+                  <NumberField
+                    label="Columns"
+                    value={getTableCols(selectedComponent)}
+                    min={1}
+                    max={20}
+                    onChange={(value) =>
+                      updateTableSize(
+                        selectedComponent,
+                        getTableRows(selectedComponent),
+                        value,
+                      )
+                    }
+                  />
+                </div>
+                <label className="grid min-w-0 gap-1">
+                  <span className="text-zinc-500">
+                    Selected Cell Background
+                  </span>
+                  <input
+                    type="color"
+                    value={
+                      parseTableData(selectedComponent)[
+                        getSelectedTableCell(selectedComponent).row
+                      ]?.[getSelectedTableCell(selectedComponent).col]
+                        ?.backgroundColor ?? "#ffffff"
+                    }
+                    onChange={(event) =>
+                      updateSelectedTableCellBackground(
+                        selectedComponent,
+                        event.target.value,
+                      )
+                    }
+                    className="h-9 w-full rounded-md border border-zinc-200"
+                  />
+                  <span className="text-xs text-zinc-400">
+                    {getSelectedTableCell(selectedComponent).row + 1}행{" "}
+                    {getSelectedTableCell(selectedComponent).col + 1}열 셀
+                  </span>
+                </label>
               </div>
             ) : null}
 
@@ -3064,6 +3180,7 @@ function PropertyPanel({
             selectedComponent.type === "image" ||
             selectedComponent.type === "video" ||
             selectedComponent.type === "icon" ||
+            selectedComponent.type === "table" ||
             selectedComponent.type === "link" ||
             selectedComponent.type === "button" ||
             selectedComponent.type === "popup" ? (

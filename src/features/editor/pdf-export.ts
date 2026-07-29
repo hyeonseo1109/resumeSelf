@@ -7,6 +7,7 @@ import {
   getImageMediaStyle,
   withAlpha,
 } from "./view-helpers";
+import { getTableGridStyle, parseTableData } from "@/features/editor/table";
 import { sanitizeRichTextHtml } from "@/lib/utils/rich-text";
 
 export function createPdfExportNode({
@@ -195,6 +196,35 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     const line = document.createElement("span");
     Object.assign(line.style, getDividerStyle(component));
     frame.appendChild(line);
+    return frame;
+  }
+
+  if (component.type === "table") {
+    Object.assign(frame.style, getTableGridStyle(component));
+    parseTableData(component).forEach((row, rowIndex, rows) => {
+      row.forEach((cell, colIndex) => {
+        const cellNode = document.createElement("div");
+        cellNode.style.boxSizing = "border-box";
+        cellNode.style.whiteSpace = "pre-wrap";
+        cellNode.style.wordBreak = "break-word";
+        cellNode.style.padding = "8px";
+        cellNode.style.borderRight =
+          colIndex === row.length - 1 ? "0" : "1px solid #d4d4d8";
+        cellNode.style.borderBottom =
+          rowIndex === rows.length - 1 ? "0" : "1px solid #d4d4d8";
+        cellNode.style.background =
+          cell.backgroundColor ??
+          String(component.props.cellBackgroundColor ?? "#ffffff");
+        cellNode.style.color = String(component.props.color ?? "#111827");
+        cellNode.style.fontFamily = String(component.props.fontFamily ?? FONT_OPTIONS[0].value);
+        cellNode.style.fontSize = `${Number(component.props.fontSize ?? 14)}px`;
+        cellNode.style.fontWeight = String(component.props.fontWeight ?? 400);
+        cellNode.style.lineHeight = `${Number(component.props.lineHeight ?? 150)}%`;
+        cellNode.style.letterSpacing = `${Number(component.props.letterSpacing ?? 0)}px`;
+        cellNode.textContent = cell.text;
+        frame.appendChild(cellNode);
+      });
+    });
     return frame;
   }
 

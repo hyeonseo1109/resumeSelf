@@ -40,6 +40,7 @@ export const insertableComponents: InsertableComponent[] = [
     label: "Hyperlink",
     description: "외부 페이지 또는 연락처 링크",
   },
+  { type: "table", label: "Table", description: "행과 열로 정보를 정리" },
   { type: "divider", label: "Divider", description: "콘텐츠 구획선" },
   { type: "spacer", label: "Spacer", description: "여백 조정" },
   { type: "section", label: "Section", description: "스크롤/라우팅 대상 구역" },

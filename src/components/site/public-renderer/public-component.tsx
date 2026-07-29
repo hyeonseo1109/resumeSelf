@@ -6,6 +6,7 @@ import {
   getImageMediaStyle,
   withAlpha,
 } from "@/features/editor/view-helpers";
+import { getTableGridStyle, parseTableData } from "@/features/editor/table";
 import { richTextToPlainText, sanitizeRichTextHtml } from "@/lib/utils/rich-text";
 import type { ResumeComponent } from "@/types/project";
 import { getMobileComponentHeight, normalizeAnchor } from "./layout";
@@ -60,6 +61,33 @@ export function PublicComponent({
       ) : component.type === "divider" ? (
         <div className="flex h-full w-full items-center justify-center">
           <span style={getDividerStyle(component)} />
+        </div>
+      ) : component.type === "table" ? (
+        <div style={getTableGridStyle(component)}>
+          {parseTableData(component).map((row, rowIndex) =>
+            row.map((cell, colIndex) => (
+              <div
+                key={`${rowIndex}-${colIndex}`}
+                className="whitespace-pre-wrap break-words border-b border-r border-zinc-300 p-2 text-sm leading-5"
+                style={{
+                  borderRightWidth: colIndex === row.length - 1 ? 0 : 1,
+                  borderBottomWidth:
+                    rowIndex === parseTableData(component).length - 1 ? 0 : 1,
+                  backgroundColor:
+                    cell.backgroundColor ??
+                    String(component.props.cellBackgroundColor ?? "#ffffff"),
+                  color: String(component.props.color ?? "#111827"),
+                  fontFamily: String(component.props.fontFamily ?? "Inter"),
+                  fontSize: Number(component.props.fontSize ?? 14),
+                  fontWeight: Number(component.props.fontWeight ?? 400),
+                  lineHeight: `${Number(component.props.lineHeight ?? 150)}%`,
+                  letterSpacing: Number(component.props.letterSpacing ?? 0),
+                }}
+              >
+                {cell.text}
+              </div>
+            )),
+          )}
         </div>
       ) : component.type === "image" && component.content ? (
         <div className="relative h-full w-full overflow-hidden" style={{ borderRadius }}>
