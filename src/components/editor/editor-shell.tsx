@@ -144,6 +144,7 @@ export function EditorShell({ project }: EditorShellProps) {
   const [iconsOpen, setIconsOpen] = useState(false);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [presets, setPresets] = useState<ComponentPreset[]>([]);
+  const [presetsLoaded, setPresetsLoaded] = useState(false);
   const [presetsLoading, setPresetsLoading] = useState(false);
   const [presetError, setPresetError] = useState<string | null>(null);
   const [presetSaveTarget, setPresetSaveTarget] = useState<ResumeComponent | null>(null);
@@ -1207,6 +1208,7 @@ export function EditorShell({ project }: EditorShellProps) {
       }
 
       setPresets(result.presets ?? []);
+      setPresetsLoaded(true);
     } catch (error) {
       setPresetError(
         error instanceof Error ? error.message : "프리셋을 불러오지 못했습니다.",
@@ -1233,6 +1235,11 @@ export function EditorShell({ project }: EditorShellProps) {
 
     if (!response.ok || !result.preset) {
       throw new Error(result.error ?? "프리셋 저장에 실패했습니다.");
+    }
+
+    if (!presetsLoaded) {
+      await loadPresets();
+      return;
     }
 
     setPresets((items) => [result.preset!, ...items]);
@@ -1436,7 +1443,7 @@ export function EditorShell({ project }: EditorShellProps) {
               type="button"
               onClick={() => {
                 setPresetsOpen((value) => !value);
-                if (!presetsOpen && presets.length === 0) {
+                if (!presetsOpen && !presetsLoaded) {
                   void loadPresets();
                 }
               }}
