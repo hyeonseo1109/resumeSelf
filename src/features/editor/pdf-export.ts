@@ -1,5 +1,9 @@
 import type { ResumeComponent, ResumeProject } from "@/types/project";
 import {
+  getCanvasBackgroundCss,
+  getCanvasBackgroundStyle,
+} from "@/features/editor/canvas-background";
+import {
   FONT_OPTIONS,
   PDF_PAGE_WIDTH,
   getComponentLayer,
@@ -37,10 +41,9 @@ export function createPdfExportNode({
   wrapper.style.position = "fixed";
   wrapper.style.left = "0";
   wrapper.style.top = "0";
-  const pageBackground =
-    (isScrollMode ? project.pages[0]?.canvasBackground : activePage?.canvasBackground) ??
-    project.pages[0]?.canvasBackground ??
-    "#ffffff";
+  const pageBackground = getCanvasBackgroundCss(
+    getCanvasBackgroundStyle(isScrollMode ? project.pages[0] : activePage),
+  );
 
   wrapper.style.background = pageBackground;
   wrapper.style.color = "#111827";

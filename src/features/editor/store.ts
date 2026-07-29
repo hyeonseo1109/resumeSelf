@@ -2,7 +2,13 @@
 
 import { create } from "zustand";
 import { createDefaultTableData, serializeTableData } from "@/features/editor/table";
-import type { ComponentType, ResumeComponent, ResumeProject, SaveStatus } from "@/types/project";
+import type {
+  CanvasBackgroundStyle,
+  ComponentType,
+  ResumeComponent,
+  ResumeProject,
+  SaveStatus,
+} from "@/types/project";
 
 type ComponentInsertRect = {
   x: number;
@@ -132,7 +138,10 @@ interface EditorState {
   moveComponents: (ids: string[], delta: { x: number; y: number }) => void;
   removeComponent: (id: string) => void;
   replaceProject: (project: ResumeProject) => void;
-  updateCanvasBackground: (color: string) => void;
+  updateCanvasBackground: (
+    color: string,
+    options?: { allPages?: boolean; style?: CanvasBackgroundStyle },
+  ) => void;
   addNavigationPage: () => void;
   updateNavigationItem: (id: string, patch: { label?: string; target?: string }) => void;
   removeNavigationPage: (id: string) => void;
@@ -379,15 +388,20 @@ export function createEditorStore(initialProject: ResumeProject) {
       set((state) => addComponentToState(state, type, undefined)),
     addComponentAt: (type, position) =>
       set((state) => addComponentToState(state, type, position)),
-    updateCanvasBackground: (color) =>
+    updateCanvasBackground: (color, options) =>
       set((state) => ({
         saveStatus: "dirty",
         project: {
           ...state.project,
-          pages: state.project.pages.map((page) => ({
-            ...page,
-            canvasBackground: color,
-          })),
+          pages: state.project.pages.map((page) =>
+            options?.allPages || page.id === state.activePageId
+              ? {
+                  ...page,
+                  canvasBackground: color,
+                  canvasBackgroundStyle: options?.style,
+                }
+              : page,
+          ),
         },
       })),
     updateComponent: (id, patch) =>

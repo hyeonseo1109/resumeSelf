@@ -1,6 +1,10 @@
 "use client";
 
 import type { ResumeProject } from "@/types/project";
+import {
+  getCanvasBackgroundCss,
+  getCanvasBackgroundStyle,
+} from "@/features/editor/canvas-background";
 import { getPageTitleSpacerOffset } from "@/features/editor/spacer-layout";
 import { PUBLIC_CANVAS_WIDTH } from "./layout";
 import { PublicComponent } from "./public-component";
@@ -21,13 +25,17 @@ export function DesktopProjectCanvas({
   isScrollMode: boolean;
   onOpenPopup: (id: string) => void;
 }) {
+  const canvasBackground = getCanvasBackgroundCss(
+    getCanvasBackgroundStyle(pageLayouts[0]?.page),
+  );
+
   return (
     <section
       className="relative mx-auto hidden px-0 lg:block"
       style={{
         width: PUBLIC_CANVAS_WIDTH,
         minHeight: canvasHeight,
-        backgroundColor: pageLayouts[0]?.page.canvasBackground ?? "#ffffff",
+        background: canvasBackground,
       }}
     >
       <div
@@ -35,7 +43,7 @@ export function DesktopProjectCanvas({
         style={{
           width: PUBLIC_CANVAS_WIDTH,
           minHeight: canvasHeight,
-          backgroundColor: pageLayouts[0]?.page.canvasBackground ?? "#ffffff",
+          background: canvasBackground,
         }}
       >
         {isScrollMode

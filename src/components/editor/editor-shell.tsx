@@ -43,6 +43,11 @@ import { ScrollToc } from "@/components/editor/scroll-toc";
 import { SiteHeader } from "@/components/editor/site-header";
 import { TableComponent } from "@/components/editor/table-component";
 import {
+  createGradientPoint,
+  getCanvasBackgroundCss,
+  getCanvasBackgroundStyle,
+} from "@/features/editor/canvas-background";
+import {
   createPdfExportNode,
   waitForPdfNode,
 } from "@/features/editor/pdf-export";
@@ -89,6 +94,7 @@ import {
   sanitizeRichTextHtml,
 } from "@/lib/utils/rich-text";
 import type {
+  CanvasBackgroundStyle,
   ComponentPreset,
   ComponentType,
   ResumeComponent,
@@ -347,6 +353,7 @@ export function EditorShell({ project }: EditorShellProps) {
     activePage?.canvasBackground ??
     editorProject.pages[0]?.canvasBackground ??
     "#ffffff";
+  const canvasBackgroundStyle = getCanvasBackgroundStyle(activePage);
 
   useEffect(() => {
     projectRef.current = editorProject;
@@ -2092,7 +2099,7 @@ export function EditorShell({ project }: EditorShellProps) {
                 onPointerDown={handleCanvasPointerDown}
                 style={{
                   minHeight: canvasHeight,
-                  backgroundColor: canvasBackground,
+                  background: getCanvasBackgroundCss(canvasBackgroundStyle),
                   transform: `scale(${canvasScale})`,
                 }}
               >
@@ -2275,9 +2282,11 @@ export function EditorShell({ project }: EditorShellProps) {
               setNavigationMode(navigationMode);
             }}
             canvasBackground={canvasBackground}
-            onUpdateCanvasBackground={(color) => {
+            canvasBackgroundStyle={canvasBackgroundStyle}
+            canvasHeight={canvasHeight}
+            onUpdateCanvasBackgroundStyle={(style, options) => {
               recordCoalescedHistory("canvas-background", 700);
-              updateCanvasBackground(color);
+              updateCanvasBackground(style.color, { ...options, style });
             }}
             isImageCropEditing={activeCropEditingId === selectedComponent?.id}
             onToggleImageCrop={(id) =>
@@ -3466,6 +3475,296 @@ function PopupOverlay({
   );
 }
 
+function CanvasBackgroundControl({
+  project,
+  canvasBackground,
+  canvasBackgroundStyle,
+  canvasHeight,
+  onUpdateCanvasBackgroundStyle,
+}: {
+  project: ResumeProject;
+  canvasBackground: string;
+  canvasBackgroundStyle: CanvasBackgroundStyle;
+  canvasHeight: number;
+  onUpdateCanvasBackgroundStyle: (
+    style: CanvasBackgroundStyle,
+    options?: { allPages?: boolean },
+  ) => void;
+}) {
+  const [activePointId, setActivePointId] = useState<string | null>(null);
+  const pointEditorRef = useRef<HTMLDivElement | null>(null);
+  const minimapRef = useRef<HTMLDivElement | null>(null);
+  const activePoint =
+    canvasBackgroundStyle.points.find((point) => point.id === activePointId) ??
+    null;
+
+  useEffect(() => {
+    if (!activePointId) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (pointEditorRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setActivePointId(null);
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setActivePointId(null);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [activePointId]);
+
+  function updateStyle(style: CanvasBackgroundStyle) {
+    onUpdateCanvasBackgroundStyle(style);
+  }
+
+  function setMode(mode: CanvasBackgroundStyle["mode"]) {
+    updateStyle({
+      mode,
+      color: canvasBackgroundStyle.color || canvasBackground,
+      points: mode === "gradient" ? canvasBackgroundStyle.points : [],
+    });
+  }
+
+  function updateBaseColor(color: string) {
+    updateStyle({
+      ...canvasBackgroundStyle,
+      color,
+      points:
+        canvasBackgroundStyle.mode === "gradient"
+          ? canvasBackgroundStyle.points
+          : [],
+    });
+  }
+
+  function getMinimapPoint(event: ReactPointerEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return {
+      x: clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100),
+      y: clamp(((event.clientY - rect.top) / rect.height) * 100, 0, 100),
+    };
+  }
+
+  function addPoint(event: ReactPointerEvent<HTMLDivElement>) {
+    if ((event.target as HTMLElement).closest("[data-gradient-point='true']")) {
+      return;
+    }
+
+    const point = getMinimapPoint(event);
+    const nextPoint = createGradientPoint(point.x, point.y);
+    updateStyle({
+      mode: "gradient",
+      color: canvasBackgroundStyle.color,
+      points: [...canvasBackgroundStyle.points, nextPoint],
+    });
+    setActivePointId(nextPoint.id);
+  }
+
+  function updatePoint(
+    id: string,
+    patch: Partial<CanvasBackgroundStyle["points"][number]>,
+  ) {
+    updateStyle({
+      ...canvasBackgroundStyle,
+      mode: "gradient",
+      points: canvasBackgroundStyle.points.map((point) =>
+        point.id === id ? { ...point, ...patch } : point,
+      ),
+    });
+  }
+
+  function deletePoint(id: string) {
+    updateStyle({
+      ...canvasBackgroundStyle,
+      mode: "gradient",
+      points: canvasBackgroundStyle.points.filter((point) => point.id !== id),
+    });
+    setActivePointId(null);
+  }
+
+  function startPointDrag(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    id: string,
+  ) {
+    event.preventDefault();
+    event.stopPropagation();
+    setActivePointId(id);
+
+    function handlePointerMove(pointerEvent: PointerEvent) {
+      const rect = minimapRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+
+      updatePoint(id, {
+        x: clamp(((pointerEvent.clientX - rect.left) / rect.width) * 100, 0, 100),
+        y: clamp(((pointerEvent.clientY - rect.top) / rect.height) * 100, 0, 100),
+      });
+    }
+
+    function handlePointerUp() {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  return (
+    <div className="grid min-w-0 gap-3 rounded-md border border-zinc-200 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-zinc-700">Canvas Background</p>
+        {project.navigationMode === "router" ? (
+          <button
+            type="button"
+            onClick={() =>
+              onUpdateCanvasBackgroundStyle(canvasBackgroundStyle, {
+                allPages: true,
+              })
+            }
+            className="rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50"
+          >
+            모든 페이지에 적용
+          </button>
+        ) : null}
+      </div>
+      <label className="grid min-w-0 gap-1">
+        <span className="text-zinc-500">배경 방식</span>
+        <select
+          value={canvasBackgroundStyle.mode}
+          onChange={(event) =>
+            setMode(event.target.value as CanvasBackgroundStyle["mode"])
+          }
+          className="h-9 rounded-md border border-zinc-200 px-2"
+        >
+          <option value="solid">단색</option>
+          <option value="gradient">그라데이션</option>
+        </select>
+      </label>
+      <label className="grid min-w-0 gap-1">
+        <span className="text-zinc-500">기본 색상</span>
+        <input
+          type="color"
+          value={canvasBackgroundStyle.color || canvasBackground}
+          onChange={(event) => updateBaseColor(event.target.value)}
+          className="h-9 w-full rounded-md border border-zinc-200"
+        />
+      </label>
+      {canvasBackgroundStyle.mode === "gradient" ? (
+        <div className="grid gap-2">
+          <span className="text-zinc-500">그라데이션 편집</span>
+          <div
+            className="max-h-72 overflow-y-auto rounded-md border border-zinc-200 bg-zinc-50 p-2"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <div
+              ref={minimapRef}
+              role="button"
+              tabIndex={0}
+              className="relative w-full overflow-hidden rounded-sm ring-1 ring-zinc-200"
+              style={{
+                aspectRatio: `840 / ${Math.max(840, canvasHeight)}`,
+                background: getCanvasBackgroundCss(canvasBackgroundStyle),
+              }}
+              onPointerDown={addPoint}
+            >
+              {canvasBackgroundStyle.points.map((point) => (
+                <button
+                  key={point.id}
+                  type="button"
+                  data-gradient-point="true"
+                  aria-label="그라데이션 편집점"
+                  className={cn(
+                    "absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow ring-1 ring-zinc-400",
+                    activePointId === point.id && "ring-2 ring-emerald-500",
+                  )}
+                  style={{
+                    left: `${point.x}%`,
+                    top: `${point.y}%`,
+                    backgroundColor: point.color,
+                  }}
+                  onPointerDown={(event) => startPointDrag(event, point.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setActivePointId(point.id);
+                  }}
+                />
+              ))}
+              {activePoint ? (
+                <div
+                  ref={pointEditorRef}
+                  data-editor-control="true"
+                  className="absolute z-20 grid w-36 gap-2 rounded-md border border-zinc-200 bg-white p-2 text-xs shadow-lg"
+                  style={{
+                    left: `min(${activePoint.x}%, calc(100% - 9rem))`,
+                    top: `min(calc(${activePoint.y}% + 12px), calc(100% - 8.5rem))`,
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <label className="grid gap-1">
+                    <span className="text-zinc-500">색상</span>
+                    <input
+                      type="color"
+                      value={activePoint.color}
+                      onChange={(event) =>
+                        updatePoint(activePoint.id, { color: event.target.value })
+                      }
+                      className="h-8 w-full rounded border border-zinc-200"
+                    />
+                  </label>
+                  <NumberField
+                    label="크기"
+                    value={activePoint.size}
+                    min={5}
+                    max={160}
+                    onChange={(value) =>
+                      updatePoint(activePoint.id, { size: clamp(value, 5, 160) })
+                    }
+                  />
+                  <NumberField
+                    label="투명도"
+                    value={activePoint.opacity}
+                    min={0}
+                    max={100}
+                    onChange={(value) =>
+                      updatePoint(activePoint.id, {
+                        opacity: clamp(value, 0, 100),
+                      })
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="h-8 rounded-md border border-red-100 text-red-600 hover:bg-red-50"
+                    onClick={() => deletePoint(activePoint.id)}
+                  >
+                    편집점 삭제
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <p className="text-xs leading-5 text-zinc-400">
+            미니맵 빈 곳을 누르면 편집점이 추가되고, 점을 드래그하면 위치가
+            바뀝니다.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function PropertyPanel({
   components,
   selectedComponent,
@@ -3475,7 +3774,9 @@ function PropertyPanel({
   project,
   onSetNavigationMode,
   canvasBackground,
-  onUpdateCanvasBackground,
+  canvasBackgroundStyle,
+  canvasHeight,
+  onUpdateCanvasBackgroundStyle,
   isImageCropEditing,
   onToggleImageCrop,
   onRecordTextAlignHistory,
@@ -3493,7 +3794,12 @@ function PropertyPanel({
   project: ResumeProject;
   onSetNavigationMode: (mode: ResumeProject["navigationMode"]) => void;
   canvasBackground: string;
-  onUpdateCanvasBackground: (color: string) => void;
+  canvasBackgroundStyle: CanvasBackgroundStyle;
+  canvasHeight: number;
+  onUpdateCanvasBackgroundStyle: (
+    style: CanvasBackgroundStyle,
+    options?: { allPages?: boolean },
+  ) => void;
   isImageCropEditing: boolean;
   onToggleImageCrop: (id: string) => void;
   onRecordTextAlignHistory: () => void;
@@ -3633,15 +3939,13 @@ function PropertyPanel({
             className="h-9 min-w-0 rounded-md border border-zinc-200 px-2"
           />
         </label>
-        <label className="grid min-w-0 gap-1">
-          <span className="text-zinc-500">Canvas Background</span>
-          <input
-            type="color"
-            value={canvasBackground}
-            onChange={(event) => onUpdateCanvasBackground(event.target.value)}
-            className="h-9 w-full rounded-md border border-zinc-200"
-          />
-        </label>
+        <CanvasBackgroundControl
+          project={project}
+          canvasBackground={canvasBackground}
+          canvasBackgroundStyle={canvasBackgroundStyle}
+          canvasHeight={canvasHeight}
+          onUpdateCanvasBackgroundStyle={onUpdateCanvasBackgroundStyle}
+        />
         {selectedComponent ? (
           <div className="grid min-w-0 gap-4 border-t border-zinc-100 pt-4">
             <div className="flex items-center justify-between gap-2">

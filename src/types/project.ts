@@ -52,7 +52,23 @@ export interface ResumePage {
   title: string;
   order: number;
   canvasBackground?: string;
+  canvasBackgroundStyle?: CanvasBackgroundStyle;
   sections: ResumeSection[];
+}
+
+export interface CanvasGradientPoint {
+  id: string;
+  x: number;
+  y: number;
+  color: string;
+  size: number;
+  opacity: number;
+}
+
+export interface CanvasBackgroundStyle {
+  mode: "solid" | "gradient";
+  color: string;
+  points: CanvasGradientPoint[];
 }
 
 export interface ResumeProject {

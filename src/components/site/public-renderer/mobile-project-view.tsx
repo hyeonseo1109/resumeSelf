@@ -1,6 +1,10 @@
 "use client";
 
 import type { ResumeProject } from "@/types/project";
+import {
+  getCanvasBackgroundCss,
+  getCanvasBackgroundStyle,
+} from "@/features/editor/canvas-background";
 import { buildMobileComponentTree } from "./layout";
 import { MobileComponentBlock } from "./mobile-component-block";
 import type { PageLayout } from "./types";
@@ -16,10 +20,14 @@ export function MobileProjectView({
   isScrollMode: boolean;
   onOpenPopup: (id: string) => void;
 }) {
+  const canvasBackground = getCanvasBackgroundCss(
+    getCanvasBackgroundStyle(pageLayouts[0]?.page),
+  );
+
   return (
     <section
       className="mx-auto grid w-full max-w-[640px] gap-8 px-4 pb-10 lg:hidden"
-      style={{ backgroundColor: pageLayouts[0]?.page.canvasBackground ?? "#ffffff" }}
+      style={{ background: canvasBackground }}
     >
       {pageLayouts.map((layout) => {
         const navItem = project.navigation.find((item) => item.target === layout.page.slug);

@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import {
+  getCanvasBackgroundCss,
+  getCanvasBackgroundStyle,
+} from "@/features/editor/canvas-background";
 import type { ResumePage, ResumeProject } from "@/types/project";
 import { DesktopProjectCanvas } from "./public-renderer/desktop-project-canvas";
 import {
@@ -43,12 +47,14 @@ export function PublicProjectRenderer({
     ? allComponents.filter((component) => component.props.popupId === openPopupId)
     : [];
   const canvasHeight = getCanvasHeight(pageLayouts);
-  const pageBackground = page.canvasBackground ?? project.pages[0]?.canvasBackground ?? "#ffffff";
+  const pageBackground = getCanvasBackgroundCss(
+    getCanvasBackgroundStyle(page ?? project.pages[0]),
+  );
 
   return (
     <main
       className="min-h-screen overflow-x-hidden text-zinc-950"
-      style={{ backgroundColor: pageBackground }}
+      style={{ background: pageBackground }}
     >
       <header className="mx-auto flex min-h-16 w-full max-w-[920px] items-center justify-between gap-3 px-3 py-3 sm:px-4">
         {isScrollMode ? (
