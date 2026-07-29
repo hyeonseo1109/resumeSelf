@@ -231,6 +231,8 @@ export function EditorShell({ project }: EditorShellProps) {
   const copyBufferRef = useRef<ResumeComponent[]>([]);
   const historyRef = useRef<ResumeProject[]>([]);
   const historyActionRef = useRef<Array<"general" | "textAlign">>([]);
+  const redoHistoryRef = useRef<ResumeProject[]>([]);
+  const redoHistoryActionRef = useRef<Array<"general" | "textAlign">>([]);
   const coalescedHistoryRef = useRef<Record<string, number>>({});
 
   const activePage =
@@ -357,6 +359,8 @@ export function EditorShell({ project }: EditorShellProps) {
   function recordHistory(action: "general" | "textAlign" = "general") {
     historyRef.current = [...historyRef.current.slice(-29), projectRef.current];
     historyActionRef.current = [...historyActionRef.current.slice(-29), action];
+    redoHistoryRef.current = [];
+    redoHistoryActionRef.current = [];
   }
 
   function recordCoalescedHistory(key: string, delay = 1000) {
@@ -395,10 +399,36 @@ export function EditorShell({ project }: EditorShellProps) {
       return;
     }
 
+    redoHistoryRef.current = [
+      ...redoHistoryRef.current.slice(-29),
+      projectRef.current,
+    ];
+    redoHistoryActionRef.current = [
+      ...redoHistoryActionRef.current.slice(-29),
+      historyActionRef.current.at(-1) ?? "general",
+    ];
     historyRef.current = historyRef.current.slice(0, -1);
     historyActionRef.current = historyActionRef.current.slice(0, -1);
     coalescedHistoryRef.current = {};
     replaceProject(previous);
+    setSelectedComponentIds([]);
+  }
+
+  function redoLastChange() {
+    const next = redoHistoryRef.current.at(-1);
+    if (!next) {
+      return;
+    }
+
+    historyRef.current = [...historyRef.current.slice(-29), projectRef.current];
+    historyActionRef.current = [
+      ...historyActionRef.current.slice(-29),
+      redoHistoryActionRef.current.at(-1) ?? "general",
+    ];
+    redoHistoryRef.current = redoHistoryRef.current.slice(0, -1);
+    redoHistoryActionRef.current = redoHistoryActionRef.current.slice(0, -1);
+    coalescedHistoryRef.current = {};
+    replaceProject(next);
     setSelectedComponentIds([]);
   }
 
@@ -530,6 +560,43 @@ export function EditorShell({ project }: EditorShellProps) {
     return true;
   }
 
+  function toggleSelectedTableRangeBold() {
+    const tableComponent =
+      selectedComponent?.type === "table" ? selectedComponent : null;
+
+    if (!tableComponent) {
+      return false;
+    }
+
+    const data = parseTableData(tableComponent);
+    const range = getSelectedTableRange(tableComponent);
+    const selectedCells = data
+      .slice(range.startRow, range.endRow + 1)
+      .flatMap((row) => row.slice(range.startCol, range.endCol + 1));
+
+    if (selectedCells.length === 0) {
+      return false;
+    }
+
+    const fallbackWeight = normalizeFontWeight(tableComponent.props.fontWeight);
+    const shouldUnbold = selectedCells.every(
+      (cell) => Number(cell.fontWeight ?? fallbackWeight) >= 700,
+    );
+
+    recordHistory();
+    updateComponent(tableComponent.id, {
+      props: {
+        ...tableComponent.props,
+        tableData: serializeTableData(
+          updateTableCellRangeStyle(data, range, {
+            fontWeight: shouldUnbold ? 400 : 700,
+          }),
+        ),
+      },
+    });
+    return true;
+  }
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const isModifierPressed = event.metaKey || event.ctrlKey;
@@ -538,6 +605,12 @@ export function EditorShell({ project }: EditorShellProps) {
       if (isModifierPressed && key === "s") {
         event.preventDefault();
         saveProjectRef.current();
+        return;
+      }
+
+      if (isModifierPressed && event.shiftKey && key === "z") {
+        event.preventDefault();
+        redoLastChange();
         return;
       }
 
@@ -556,6 +629,13 @@ export function EditorShell({ project }: EditorShellProps) {
           key === "l" ? "left" : key === "r" ? "right" : "center";
 
         if (alignSelectedTextComponents(textAlign)) {
+          event.preventDefault();
+          return;
+        }
+      }
+
+      if (isModifierPressed && key === "b") {
+        if (toggleSelectedTableRangeBold()) {
           event.preventDefault();
           return;
         }
