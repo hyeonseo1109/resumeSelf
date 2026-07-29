@@ -23,6 +23,7 @@ import type { ResumeComponent } from "@/types/project";
 export function TableComponent({
   component,
   preview,
+  isSelected: isTableSelected,
   onSelect,
   onUpdate,
   onResizeStart,
@@ -30,6 +31,7 @@ export function TableComponent({
 }: {
   component: ResumeComponent;
   preview: boolean;
+  isSelected: boolean;
   onSelect: () => void;
   onUpdate: (patch: Partial<ResumeComponent>) => void;
   onResizeStart?: () => void;
@@ -42,6 +44,10 @@ export function TableComponent({
     col: number;
   } | null>(null);
   const [cellDragStart, setCellDragStart] = useState<{
+    row: number;
+    col: number;
+  } | null>(null);
+  const [focusedCell, setFocusedCell] = useState<{
     row: number;
     col: number;
   } | null>(null);
@@ -247,7 +253,12 @@ export function TableComponent({
         row.map((cell, colIndex) => {
           const isSelected =
             selectedCell.row === rowIndex && selectedCell.col === colIndex;
+          const isFocused =
+            focusedCell?.row === rowIndex && focusedCell.col === colIndex;
+          const shouldShowCellSelection =
+            isTableSelected && (Boolean(focusedCell) || Boolean(cellDragStart));
           const isInSelectedRange =
+            shouldShowCellSelection &&
             rowIndex >= selectedRange.startRow &&
             rowIndex <= selectedRange.endRow &&
             colIndex >= selectedRange.startCol &&
@@ -263,6 +274,8 @@ export function TableComponent({
                 startCellRangeSelection(rowIndex, colIndex);
               }}
               onPointerEnter={() => extendCellRangeSelection(rowIndex, colIndex)}
+              onFocus={() => setFocusedCell({ row: rowIndex, col: colIndex })}
+              onBlur={() => setFocusedCell(null)}
               onMouseDown={(event) => {
                 event.stopPropagation();
               }}
@@ -290,7 +303,10 @@ export function TableComponent({
                 isInSelectedRange &&
                   !preview &&
                   "bg-emerald-50 ring-1 ring-inset ring-emerald-300",
-                isSelected && !preview && "ring-2 ring-emerald-500",
+                isSelected &&
+                  isFocused &&
+                  !preview &&
+                  "ring-2 ring-emerald-500",
               )}
               style={{
                 borderRightWidth: colIndex === cols - 1 ? 0 : 1,
@@ -304,6 +320,7 @@ export function TableComponent({
                 fontWeight: Number(component.props.fontWeight ?? 400),
                 lineHeight: `${Number(component.props.lineHeight ?? 150)}%`,
                 letterSpacing: Number(component.props.letterSpacing ?? 0),
+                textAlign: cell.textAlign ?? "left",
               }}
             />
           );

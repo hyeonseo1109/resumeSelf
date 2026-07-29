@@ -231,6 +231,7 @@ function createPdfComponent(component: ResumeComponent, top: number) {
         cellNode.style.fontWeight = String(component.props.fontWeight ?? 400);
         cellNode.style.lineHeight = `${Number(component.props.lineHeight ?? 150)}%`;
         cellNode.style.letterSpacing = `${Number(component.props.letterSpacing ?? 0)}px`;
+        cellNode.style.textAlign = cell.textAlign ?? "left";
         cellNode.textContent = cell.text;
         frame.appendChild(cellNode);
       });

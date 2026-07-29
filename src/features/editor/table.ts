@@ -4,6 +4,7 @@ import type { ResumeComponent } from "@/types/project";
 export type TableCell = {
   text: string;
   backgroundColor?: string;
+  textAlign?: "left" | "center" | "right";
 };
 
 export type TableData = TableCell[][];
@@ -34,6 +35,12 @@ export function parseTableData(component: ResumeComponent): TableData {
                     backgroundColor:
                       typeof (cell as TableCell).backgroundColor === "string"
                         ? (cell as TableCell).backgroundColor
+                        : undefined,
+                    textAlign:
+                      (cell as TableCell).textAlign === "center" ||
+                      (cell as TableCell).textAlign === "right" ||
+                      (cell as TableCell).textAlign === "left"
+                        ? (cell as TableCell).textAlign
                         : undefined,
                   }
                 : { text: String(cell ?? "") },
@@ -137,6 +144,7 @@ export function resizeTableData(data: TableData, rows: number, cols: number) {
     Array.from({ length: cols }, (_, colIndex) => ({
       text: data[rowIndex]?.[colIndex]?.text ?? "",
       backgroundColor: data[rowIndex]?.[colIndex]?.backgroundColor,
+      textAlign: data[rowIndex]?.[colIndex]?.textAlign,
     })),
   );
 }
@@ -194,6 +202,23 @@ export function updateTableCellBackground(
           colIndex === col ? { ...cell, backgroundColor } : cell,
         )
       : items,
+  );
+}
+
+export function updateTableCellRangeTextAlign(
+  data: TableData,
+  range: ReturnType<typeof getSelectedTableRange>,
+  textAlign: "left" | "center" | "right",
+) {
+  return data.map((items, rowIndex) =>
+    items.map((cell, colIndex) =>
+      rowIndex >= range.startRow &&
+      rowIndex <= range.endRow &&
+      colIndex >= range.startCol &&
+      colIndex <= range.endCol
+        ? { ...cell, textAlign }
+        : cell,
+    ),
   );
 }
 

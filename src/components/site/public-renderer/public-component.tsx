@@ -87,6 +87,7 @@ export function PublicComponent({
                   fontWeight: Number(component.props.fontWeight ?? 400),
                   lineHeight: `${Number(component.props.lineHeight ?? 150)}%`,
                   letterSpacing: Number(component.props.letterSpacing ?? 0),
+                  textAlign: cell.textAlign ?? "left",
                 }}
               >
                 {cell.text}

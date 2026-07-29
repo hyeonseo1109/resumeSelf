@@ -53,6 +53,7 @@ import {
 import { createEditorStore } from "@/features/editor/store";
 import {
   getSelectedTableCell,
+  getSelectedTableRange,
   getTableCols,
   getTableRows,
   hasTrimmedTableContent,
@@ -60,6 +61,7 @@ import {
   resizeTableData,
   serializeTableData,
   updateTableCellBackground,
+  updateTableCellRangeTextAlign,
 } from "@/features/editor/table";
 import {
   FONT_OPTIONS,
@@ -2831,6 +2833,7 @@ function CanvasComponent({
         <TableComponent
           component={component}
           preview={preview}
+          isSelected={isSelected}
           onSelect={() => onSelect()}
           onUpdate={onUpdate}
           onResizeStart={onResizeStart}
@@ -3399,6 +3402,23 @@ function PropertyPanel({
     });
   }
 
+  function updateSelectedTableRangeTextAlign(
+    component: ResumeComponent,
+    textAlign: "left" | "center" | "right",
+  ) {
+    const data = parseTableData(component);
+    const range = getSelectedTableRange(component);
+
+    onUpdate(component.id, {
+      props: {
+        ...component.props,
+        tableData: serializeTableData(
+          updateTableCellRangeTextAlign(data, range, textAlign),
+        ),
+      },
+    });
+  }
+
   return (
     <aside className="sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto overflow-x-hidden border-l border-zinc-200 bg-white p-4">
       <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
@@ -3567,6 +3587,31 @@ function PropertyPanel({
                   <span className="text-xs text-zinc-400">
                     {getSelectedTableCell(selectedComponent).row + 1}행{" "}
                     {getSelectedTableCell(selectedComponent).col + 1}열 셀
+                  </span>
+                </label>
+                <label className="grid min-w-0 gap-1">
+                  <span className="text-zinc-500">Selected Cell Align</span>
+                  <select
+                    value={
+                      parseTableData(selectedComponent)[
+                        getSelectedTableCell(selectedComponent).row
+                      ]?.[getSelectedTableCell(selectedComponent).col]
+                        ?.textAlign ?? "left"
+                    }
+                    onChange={(event) =>
+                      updateSelectedTableRangeTextAlign(
+                        selectedComponent,
+                        event.target.value as "left" | "center" | "right",
+                      )
+                    }
+                    className="h-9 rounded-md border border-zinc-200 px-2"
+                  >
+                    <option value="left">좌측 정렬</option>
+                    <option value="center">가운데 정렬</option>
+                    <option value="right">우측 정렬</option>
+                  </select>
+                  <span className="text-xs text-zinc-400">
+                    드래그 선택한 셀 범위에 적용됩니다.
                   </span>
                 </label>
               </div>
