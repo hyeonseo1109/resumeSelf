@@ -150,6 +150,7 @@ export function EditorShell({ project }: EditorShellProps) {
   const scrollAreaRef = useRef<HTMLElement | null>(null);
   const projectRef = useRef(editorProject);
   const saveStatusRef = useRef(saveStatus);
+  const saveProjectRef = useRef<() => void>(() => undefined);
   const copyBufferRef = useRef<ResumeComponent[]>([]);
   const historyRef = useRef<ResumeProject[]>([]);
 
@@ -368,12 +369,18 @@ export function EditorShell({ project }: EditorShellProps) {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (mode !== "edit" || isEditableTarget(event.target)) {
+      const isModifierPressed = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+
+      if (isModifierPressed && key === "s") {
+        event.preventDefault();
+        saveProjectRef.current();
         return;
       }
 
-      const isModifierPressed = event.metaKey || event.ctrlKey;
-      const key = event.key.toLowerCase();
+      if (mode !== "edit" || isEditableTarget(event.target)) {
+        return;
+      }
 
       if (isModifierPressed && key === "c") {
         event.preventDefault();
@@ -524,6 +531,12 @@ export function EditorShell({ project }: EditorShellProps) {
       markSaveError();
     }
   }, [markSaveError, markSaved, markSaving]);
+
+  useEffect(() => {
+    saveProjectRef.current = () => {
+      void saveProject();
+    };
+  }, [saveProject]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
