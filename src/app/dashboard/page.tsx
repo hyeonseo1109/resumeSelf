@@ -9,6 +9,7 @@ import {
   updateProjectDeleteLockAction,
   updateProjectMemoAction,
   updateProjectSlugAction,
+  updateProjectTitleAction,
 } from "@/app/dashboard/actions";
 import { getCurrentUser, listProjects } from "@/server/projects";
 
@@ -59,6 +60,7 @@ export default async function DashboardPage({
           updateDeleteLockAction={updateProjectDeleteLockAction}
           updateMemoAction={updateProjectMemoAction}
           updateSlugAction={updateProjectSlugAction}
+          updateTitleAction={updateProjectTitleAction}
         />
       </main>
     </div>

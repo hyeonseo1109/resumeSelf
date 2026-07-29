@@ -649,6 +649,40 @@ export async function updateProjectSlugAction(formData: FormData) {
   revalidatePath("/dashboard");
 }
 
+export async function updateProjectTitleAction(formData: FormData) {
+  const projectId = String(formData.get("projectId") ?? "");
+  const title = String(formData.get("title") ?? "").trim().slice(0, 120);
+  const supabase = await createClient();
+
+  if (!supabase) {
+    redirect("/dashboard?error=supabase-not-configured");
+  }
+
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) {
+    redirect("/dashboard?error=login-required");
+  }
+
+  if (!projectId || !title) {
+    redirect("/dashboard?error=missing-title");
+  }
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ title })
+    .eq("id", projectId)
+    .eq("owner_id", user.id);
+
+  if (error) {
+    redirect(`/dashboard?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidateTag("public-projects", "max");
+  revalidatePath("/dashboard");
+}
+
 export async function updateProjectMemoAction(formData: FormData) {
   const projectId = String(formData.get("projectId") ?? "");
   const memo = String(formData.get("memo") ?? "").trim().slice(0, 500);

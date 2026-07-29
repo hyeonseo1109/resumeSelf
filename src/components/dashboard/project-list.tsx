@@ -19,6 +19,7 @@ interface ProjectListProps {
   updateDeleteLockAction: (formData: FormData) => void | Promise<void>;
   updateMemoAction: (formData: FormData) => void | Promise<void>;
   updateSlugAction: (formData: FormData) => void | Promise<void>;
+  updateTitleAction: (formData: FormData) => void | Promise<void>;
 }
 
 export function ProjectList({
@@ -32,6 +33,7 @@ export function ProjectList({
   updateDeleteLockAction,
   updateMemoAction,
   updateSlugAction,
+  updateTitleAction,
 }: ProjectListProps) {
   const [pendingProject, setPendingProject] = useState<PendingProjectDraft | null>(null);
   const optimisticProjectCount = projects.length + (pendingProject ? 1 : 0);
@@ -72,6 +74,11 @@ export function ProjectList({
             updateDeleteLockAction={updateDeleteLockAction}
             updateMemoAction={updateMemoAction}
             updateSlugAction={updateSlugAction}
+            updateTitleAction={updateTitleAction}
+            existingProjects={projects.map((item) => ({
+              id: item.id,
+              title: item.title,
+            }))}
           />
         ))}
       </div>
