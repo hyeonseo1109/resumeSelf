@@ -1,28 +1,59 @@
 "use client";
 
-import { Plus, X } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
+import type { FormEvent } from "react";
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
+
+export interface PendingProjectDraft {
+  title: string;
+  slug: string;
+  mode: "template" | "free";
+}
 
 interface CreateProjectDialogProps {
   canCreate: boolean;
   action: (formData: FormData) => void | Promise<void>;
+  onCreatePending?: (project: PendingProjectDraft) => void;
 }
 
 export function CreateProjectDialog({
   canCreate,
   action,
+  onCreatePending,
 }: CreateProjectDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const title = String(formData.get("title") ?? "").trim();
+    const slug = String(formData.get("slug") ?? "").trim();
+    const rawMode = String(formData.get("mode") ?? "template");
+
+    if (!title) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    onCreatePending?.({
+      title,
+      slug,
+      mode: rawMode === "free" ? "free" : "template",
+    });
+  };
 
   return (
     <>
       <button
         type="button"
-        disabled={!canCreate}
+        disabled={!canCreate || isSubmitting}
         onClick={() => setIsOpen(true)}
         className="inline-flex items-center gap-1.5 rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-300"
       >
-        <Plus className="size-4" />새 프로젝트
+        {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+        새 프로젝트
       </button>
 
       {isOpen ? (
@@ -37,14 +68,15 @@ export function CreateProjectDialog({
               </div>
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setIsOpen(false)}
-                className="inline-flex size-9 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100"
+                className="inline-flex size-9 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-300"
               >
                 <X className="size-4" />
               </button>
             </div>
 
-            <form action={action} className="grid gap-4 p-5">
+            <form action={action} onSubmit={handleSubmit} className="grid gap-4 p-5">
               <label className="grid gap-1.5">
                 <span className="text-sm font-medium text-zinc-700">
                   프로젝트 이름
@@ -114,22 +146,33 @@ export function CreateProjectDialog({
               <div className="flex justify-end gap-2 border-t border-zinc-100 pt-4">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setIsOpen(false)}
-                  className="h-10 rounded-md border border-zinc-200 px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                  className="h-10 rounded-md border border-zinc-200 px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-300"
                 >
                   취소
                 </button>
-                <button
-                  type="submit"
-                  className="h-10 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
-                >
-                  생성하고 편집
-                </button>
+                <CreateProjectSubmitButton />
               </div>
             </form>
           </div>
         </div>
       ) : null}
     </>
+  );
+}
+
+function CreateProjectSubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="inline-flex h-10 items-center gap-1.5 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+    >
+      {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+      {pending ? "생성 중..." : "생성하고 편집"}
+    </button>
   );
 }

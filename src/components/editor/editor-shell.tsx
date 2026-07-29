@@ -1348,7 +1348,9 @@ export function EditorShell({ project }: EditorShellProps) {
         className={cn(
           "grid flex-1",
           mode === "edit"
-            ? "grid-cols-[240px_minmax(0,1fr)_360px]"
+            ? isScrollMode
+              ? "grid-cols-[240px_minmax(0,1fr)_132px_360px]"
+              : "grid-cols-[240px_minmax(0,1fr)_360px]"
             : "grid-cols-1",
         )}
       >
@@ -1417,7 +1419,10 @@ export function EditorShell({ project }: EditorShellProps) {
           </aside>
         ) : null}
 
-        <main ref={scrollAreaRef} className="min-w-0 overflow-auto p-6">
+        <main
+          ref={scrollAreaRef}
+          className={cn("min-w-0 overflow-auto p-6", isScrollMode && mode === "edit" && "pr-3")}
+        >
           <DndContext
             sensors={sensors}
             onDragMove={handleDragMove}
@@ -1429,7 +1434,7 @@ export function EditorShell({ project }: EditorShellProps) {
             }}
           >
             <div
-              className="relative mx-auto"
+              className={cn("relative", isScrollMode && mode === "edit" ? "ml-6 mr-auto" : "mx-auto")}
               style={{
                 width: 840 * canvasScale,
                 minHeight: canvasHeight * canvasScale,
@@ -1547,6 +1552,25 @@ export function EditorShell({ project }: EditorShellProps) {
           </DndContext>
         </main>
 
+        {mode === "edit" &&
+        editorProject.navigationMode === "scroll" &&
+        editorProject.navigation.length > 0 ? (
+          <aside className="min-w-0 border-l border-zinc-100 bg-zinc-50/40 px-2 py-6">
+            <ScrollToc
+              navigation={editorProject.navigation}
+              activeTarget={
+                editorProject.navigation.some(
+                  (item) => item.target === activeTocTarget,
+                )
+                  ? activeTocTarget
+                  : (editorProject.navigation[0]?.target ?? "")
+              }
+              onSelect={(target) => handleHeaderNavigation(target)}
+              placement="rail"
+            />
+          </aside>
+        ) : null}
+
         {mode === "edit" ? (
           <PropertyPanel
             components={components}
@@ -1573,7 +1597,8 @@ export function EditorShell({ project }: EditorShellProps) {
           />
         ) : null}
       </div>
-      {editorProject.navigationMode === "scroll" &&
+      {mode !== "edit" &&
+      editorProject.navigationMode === "scroll" &&
       editorProject.navigation.length > 0 ? (
         <ScrollToc
           navigation={editorProject.navigation}
