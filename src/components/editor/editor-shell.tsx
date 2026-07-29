@@ -158,6 +158,7 @@ export function EditorShell({ project }: EditorShellProps) {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
   const scrollAreaRef = useRef<HTMLElement | null>(null);
+  const presetsMenuRef = useRef<HTMLDivElement | null>(null);
   const projectRef = useRef(editorProject);
   const saveStatusRef = useRef(saveStatus);
   const saveProjectRef = useRef<() => void>(() => undefined);
@@ -458,6 +459,33 @@ export function EditorShell({ project }: EditorShellProps) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   });
+
+  useEffect(() => {
+    if (!presetsOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (presetsMenuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setPresetsOpen(false);
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setPresetsOpen(false);
+      }
+    }
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [presetsOpen]);
 
   useEffect(() => {
     const observedElement = scrollAreaRef.current;
@@ -1403,7 +1431,7 @@ export function EditorShell({ project }: EditorShellProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="relative">
+          <div ref={presetsMenuRef} className="relative">
             <button
               type="button"
               onClick={() => {
