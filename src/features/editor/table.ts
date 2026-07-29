@@ -316,6 +316,40 @@ export function deleteTableCols(data: TableData, startCol: number, endCol: numbe
   });
 }
 
+export function reorderTableRow(data: TableData, fromIndex: number, toIndex: number) {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= data.length ||
+    toIndex >= data.length
+  ) {
+    return data;
+  }
+
+  const nextData = [...data];
+  const [movedRow] = nextData.splice(fromIndex, 1);
+  nextData.splice(toIndex, 0, movedRow);
+  return nextData;
+}
+
+export function reorderTableSize(sizes: number[], fromIndex: number, toIndex: number) {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= sizes.length ||
+    toIndex >= sizes.length
+  ) {
+    return sizes;
+  }
+
+  const nextSizes = [...sizes];
+  const [movedSize] = nextSizes.splice(fromIndex, 1);
+  nextSizes.splice(toIndex, 0, movedSize);
+  return nextSizes;
+}
+
 export function updateTableCellText(
   data: TableData,
   row: number,

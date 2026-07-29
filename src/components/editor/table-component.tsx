@@ -6,6 +6,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { useEffect, useRef, useState } from "react";
+import { GripVertical } from "lucide-react";
 import {
   clearTableRange,
   deleteTableCols,
@@ -24,6 +25,8 @@ import {
   parseTsvToTableData,
   pasteTableRange,
   parseTableData,
+  reorderTableRow,
+  reorderTableSize,
   serializeTableData,
   serializeTableRangeAsTsv,
   serializeTableSizes,
@@ -78,7 +81,10 @@ export function TableComponent({
     row: number;
     col: number;
   } | null>(null);
+  const [draggingRow, setDraggingRow] = useState<number | null>(null);
+  const [rowDropIndex, setRowDropIndex] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const data = parseTableData(component);
   const rows = getTableRows(component);
   const cols = getTableCols(component);
@@ -454,6 +460,86 @@ export function TableComponent({
     window.addEventListener("pointerup", handlePointerUp);
   }
 
+  function getRowIndexFromClientY(clientY: number) {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return 0;
+    }
+
+    const localY = (clientY - rect.top) / interactionScale;
+    let accumulated = 0;
+
+    for (let index = 0; index < rowHeights.length; index += 1) {
+      accumulated += rowHeights[index] ?? 0;
+      if (localY < accumulated) {
+        return index;
+      }
+    }
+
+    return rowHeights.length - 1;
+  }
+
+  function selectRow(rowIndex: number) {
+    selectCellRange(
+      { row: rowIndex, col: 0 },
+      { row: rowIndex, col: Math.max(0, cols - 1) },
+    );
+  }
+
+  function startRowReorder(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    rowIndex: number,
+  ) {
+    if (preview || rows <= 1) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    onSelect();
+    onResizeStart?.();
+    selectRow(rowIndex);
+    setDraggingRow(rowIndex);
+    setRowDropIndex(rowIndex);
+
+    function handlePointerMove(pointerEvent: PointerEvent) {
+      setRowDropIndex(getRowIndexFromClientY(pointerEvent.clientY));
+    }
+
+    function handlePointerUp(pointerEvent: PointerEvent) {
+      const nextIndex = getRowIndexFromClientY(pointerEvent.clientY);
+
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      setDraggingRow(null);
+      setRowDropIndex(null);
+
+      if (nextIndex === rowIndex) {
+        return;
+      }
+
+      const nextData = reorderTableRow(data, rowIndex, nextIndex);
+      const nextRowHeights = reorderTableSize(rowHeights, rowIndex, nextIndex);
+
+      onUpdate({
+        props: {
+          ...component.props,
+          tableData: serializeTableData(nextData),
+          tableRowHeights: serializeTableSizes(nextRowHeights),
+          selectedCellRow: nextIndex,
+          selectedCellCol: 0,
+          selectedCellStartRow: nextIndex,
+          selectedCellStartCol: 0,
+          selectedCellEndRow: nextIndex,
+          selectedCellEndCol: Math.max(0, cols - 1),
+        },
+      });
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
   function startCellRangeSelection(row: number, col: number) {
     if (preview) {
       return;
@@ -481,6 +567,7 @@ export function TableComponent({
 
   return (
     <div
+      ref={wrapperRef}
       className="relative h-full w-full"
       onCopyCapture={copySelectedRange}
       onCutCapture={cutSelectedRange}
@@ -500,94 +587,131 @@ export function TableComponent({
           col: selectedCell.col,
         });
       }}
-      style={getTableGridStyle(component)}
     >
-      {data.map((row, rowIndex) =>
-        row.map((cell, colIndex) => {
-          const isSelected =
-            selectedCell.row === rowIndex && selectedCell.col === colIndex;
-          const isFocused =
-            focusedCell?.row === rowIndex && focusedCell.col === colIndex;
-          const shouldShowCellSelection =
-            isTableSelected && (Boolean(focusedCell) || Boolean(cellDragStart));
-          const isInSelectedRange =
-            shouldShowCellSelection &&
-            rowIndex >= selectedRange.startRow &&
-            rowIndex <= selectedRange.endRow &&
-            colIndex >= selectedRange.startCol &&
-            colIndex <= selectedRange.endCol;
+      <div className="absolute inset-0" style={getTableGridStyle(component)}>
+        {data.map((row, rowIndex) =>
+          row.map((cell, colIndex) => {
+            const isSelected =
+              selectedCell.row === rowIndex && selectedCell.col === colIndex;
+            const isFocused =
+              focusedCell?.row === rowIndex && focusedCell.col === colIndex;
+            const shouldShowCellSelection =
+              isTableSelected && (Boolean(focusedCell) || Boolean(cellDragStart));
+            const isInSelectedRange =
+              shouldShowCellSelection &&
+              rowIndex >= selectedRange.startRow &&
+              rowIndex <= selectedRange.endRow &&
+              colIndex >= selectedRange.startCol &&
+              colIndex <= selectedRange.endCol;
 
-          return (
-            <textarea
-              key={`${rowIndex}-${colIndex}`}
-              readOnly={preview}
-              value={cell.text}
-              onPointerDown={(event) => {
-                event.stopPropagation();
-                startCellRangeSelection(rowIndex, colIndex);
-              }}
-              onPointerEnter={() => extendCellRangeSelection(rowIndex, colIndex)}
-              onFocus={() => setFocusedCell({ row: rowIndex, col: colIndex })}
-              onBlur={() => setFocusedCell(null)}
-              onMouseDown={(event) => {
-                event.stopPropagation();
-              }}
-              onDragStart={(event) => event.preventDefault()}
-              onContextMenu={(event) => {
-                if (preview) {
-                  return;
+            return (
+              <textarea
+                key={`${rowIndex}-${colIndex}`}
+                readOnly={preview}
+                value={cell.text}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  startCellRangeSelection(rowIndex, colIndex);
+                }}
+                onPointerEnter={() => extendCellRangeSelection(rowIndex, colIndex)}
+                onFocus={() => setFocusedCell({ row: rowIndex, col: colIndex })}
+                onBlur={() => setFocusedCell(null)}
+                onMouseDown={(event) => {
+                  event.stopPropagation();
+                }}
+                onDragStart={(event) => event.preventDefault()}
+                onContextMenu={(event) => {
+                  if (preview) {
+                    return;
+                  }
+                  event.preventDefault();
+                  event.stopPropagation();
+                  selectCell(rowIndex, colIndex);
+                  setMenu({
+                    x: event.nativeEvent.offsetX + event.currentTarget.offsetLeft,
+                    y: event.nativeEvent.offsetY + event.currentTarget.offsetTop,
+                    row: rowIndex,
+                    col: colIndex,
+                  });
+                }}
+                onChange={(event) =>
+                  updateCell(rowIndex, colIndex, event.target.value)
                 }
-                event.preventDefault();
-                event.stopPropagation();
-                selectCell(rowIndex, colIndex);
-                setMenu({
-                  x: event.nativeEvent.offsetX + event.currentTarget.offsetLeft,
-                  y: event.nativeEvent.offsetY + event.currentTarget.offsetTop,
-                  row: rowIndex,
-                  col: colIndex,
-                });
-              }}
-              onChange={(event) =>
-                updateCell(rowIndex, colIndex, event.target.value)
-              }
-              className={cn(
-                "min-h-0 resize-none border-b border-r border-zinc-300 bg-transparent p-2 text-sm leading-5 outline-none",
-                !preview && "focus:ring-2 focus:ring-emerald-500",
-                isInSelectedRange &&
-                  !preview &&
-                  "bg-emerald-50 ring-1 ring-inset ring-emerald-300",
-                isSelected &&
-                  isFocused &&
-                  !preview &&
-                  "ring-2 ring-emerald-500",
-              )}
-              style={{
-                borderRightWidth: colIndex === cols - 1 ? 0 : 1,
-                borderBottomWidth: rowIndex === rows - 1 ? 0 : 1,
-                backgroundColor:
-                  cell.backgroundColor ??
-                  String(component.props.cellBackgroundColor ?? "#ffffff"),
-                color: String(cell.color ?? component.props.color ?? "#111827"),
-                fontFamily: String(
-                  cell.fontFamily ?? component.props.fontFamily ?? "Inter",
-                ),
-                fontSize: Number(cell.fontSize ?? component.props.fontSize ?? 14),
-                fontWeight: Number(
-                  cell.fontWeight ?? component.props.fontWeight ?? 400,
-                ),
-                lineHeight: `${Number(
-                  cell.lineHeight ?? component.props.lineHeight ?? 150,
-                )}%`,
-                letterSpacing: Number(
-                  cell.letterSpacing ?? component.props.letterSpacing ?? 0,
-                ),
-                textAlign: cell.textAlign ?? "left",
-                alignContent: getCellVerticalAlign(cell.verticalAlign),
-              }}
-            />
-          );
-        }),
-      )}
+                className={cn(
+                  "min-h-0 resize-none border-b border-r border-zinc-300 bg-transparent p-2 text-sm leading-5 outline-none",
+                  !preview && "focus:ring-2 focus:ring-emerald-500",
+                  isInSelectedRange &&
+                    !preview &&
+                    "bg-emerald-50 ring-1 ring-inset ring-emerald-300",
+                  isSelected &&
+                    isFocused &&
+                    !preview &&
+                    "ring-2 ring-emerald-500",
+                )}
+                style={{
+                  borderRightWidth: colIndex === cols - 1 ? 0 : 1,
+                  borderBottomWidth: rowIndex === rows - 1 ? 0 : 1,
+                  backgroundColor:
+                    cell.backgroundColor ??
+                    String(component.props.cellBackgroundColor ?? "#ffffff"),
+                  color: String(cell.color ?? component.props.color ?? "#111827"),
+                  fontFamily: String(
+                    cell.fontFamily ?? component.props.fontFamily ?? "Inter",
+                  ),
+                  fontSize: Number(cell.fontSize ?? component.props.fontSize ?? 14),
+                  fontWeight: Number(
+                    cell.fontWeight ?? component.props.fontWeight ?? 400,
+                  ),
+                  lineHeight: `${Number(
+                    cell.lineHeight ?? component.props.lineHeight ?? 150,
+                  )}%`,
+                  letterSpacing: Number(
+                    cell.letterSpacing ?? component.props.letterSpacing ?? 0,
+                  ),
+                  textAlign: cell.textAlign ?? "left",
+                  alignContent: getCellVerticalAlign(cell.verticalAlign),
+                }}
+              />
+            );
+          }),
+        )}
+      </div>
+      {isTableSelected && !preview
+        ? rowHeights.map((height, rowIndex) => {
+            const top = rowHeights
+              .slice(0, rowIndex)
+              .reduce((total, rowHeight) => total + rowHeight, 0);
+            const isDragged = draggingRow === rowIndex;
+            const isDropTarget = rowDropIndex === rowIndex;
+
+            return (
+              <button
+                key={`row-reorder-${rowIndex}`}
+                type="button"
+                data-editor-control="true"
+                aria-label={`${rowIndex + 1}행 순서 변경`}
+                title="행 순서 변경"
+                className={cn(
+                  "absolute -left-8 z-50 flex w-6 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-400 shadow-sm transition hover:border-emerald-400 hover:text-emerald-600",
+                  rows <= 1 && "cursor-not-allowed opacity-40",
+                  rows > 1 && "cursor-grab active:cursor-grabbing",
+                  isDragged && "border-emerald-500 bg-emerald-50 text-emerald-700",
+                )}
+                style={{
+                  top: top + 3,
+                  height: Math.max(24, height - 6),
+                }}
+                onPointerDown={(event) => startRowReorder(event, rowIndex)}
+                onClick={() => selectRow(rowIndex)}
+              >
+                <GripVertical className="size-3.5" />
+                {isDropTarget && draggingRow !== null ? (
+                  <span className="pointer-events-none absolute -right-[calc(100%+0.5rem)] top-1/2 h-0.5 w-[calc(100vw)] -translate-y-1/2 bg-emerald-400/70" />
+                ) : null}
+              </button>
+            );
+          })
+        : null}
       {!preview
         ? colWidths.slice(0, -1).map((_, colIndex) => (
             <button
