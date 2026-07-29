@@ -5,6 +5,7 @@ import {
   PointerSensor,
   type DragEndEvent,
   type DragMoveEvent,
+  type PointerSensorOptions,
   useDraggable,
   useSensor,
   useSensors,
@@ -76,7 +77,11 @@ import {
 } from "@/features/editor/view-helpers";
 import { cn } from "@/lib/utils/cn";
 import { getPublicProjectUrl } from "@/lib/utils/site-url";
-import { richTextToPlainText, sanitizeRichTextHtml } from "@/lib/utils/rich-text";
+import {
+  resetRichTextLineSpacing,
+  richTextToPlainText,
+  sanitizeRichTextHtml,
+} from "@/lib/utils/rich-text";
 import type { ComponentPreset, ResumeComponent, ResumeProject } from "@/types/project";
 
 interface EditorShellProps {
@@ -84,6 +89,36 @@ interface EditorShellProps {
 }
 
 const SCROLL_CANVAS_HEADER_HEIGHT = 64;
+
+function isEditorInteractiveTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  return Boolean(
+    target.closest(
+      "[data-editor-control], [contenteditable='true'], .resume-rich-text-content, button, a, input, textarea, select",
+    ),
+  );
+}
+
+class EditorPointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: "onPointerDown" as const,
+      handler: (
+        event: ReactPointerEvent,
+        options: PointerSensorOptions,
+      ) => {
+        if (isEditorInteractiveTarget(event.target)) {
+          return false;
+        }
+
+        return PointerSensor.activators[0]?.handler(event, options) ?? true;
+      },
+    },
+  ];
+}
 
 export function EditorShell({ project }: EditorShellProps) {
   const store = useMemo(() => createEditorStore(project), [project]);
@@ -157,7 +192,7 @@ export function EditorShell({ project }: EditorShellProps) {
     currentY: number;
   } | null>(null);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(EditorPointerSensor, { activationConstraint: { distance: 6 } }),
   );
   const scrollAreaRef = useRef<HTMLElement | null>(null);
   const presetsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -166,6 +201,7 @@ export function EditorShell({ project }: EditorShellProps) {
   const saveProjectRef = useRef<() => void>(() => undefined);
   const copyBufferRef = useRef<ResumeComponent[]>([]);
   const historyRef = useRef<ResumeProject[]>([]);
+  const historyActionRef = useRef<Array<"general" | "textAlign">>([]);
 
   const activePage =
     editorProject.pages.find((page) => page.id === activePageId) ??
@@ -282,8 +318,9 @@ export function EditorShell({ project }: EditorShellProps) {
     saveStatusRef.current = saveStatus;
   }, [saveStatus]);
 
-  function recordHistory() {
+  function recordHistory(action: "general" | "textAlign" = "general") {
     historyRef.current = [...historyRef.current.slice(-29), projectRef.current];
+    historyActionRef.current = [...historyActionRef.current.slice(-29), action];
   }
 
   function undoLastChange() {
@@ -293,6 +330,7 @@ export function EditorShell({ project }: EditorShellProps) {
     }
 
     historyRef.current = historyRef.current.slice(0, -1);
+    historyActionRef.current = historyActionRef.current.slice(0, -1);
     replaceProject(previous);
     setSelectedComponentIds([]);
   }
@@ -408,7 +446,7 @@ export function EditorShell({ project }: EditorShellProps) {
       return false;
     }
 
-    recordHistory();
+    recordHistory("textAlign");
     editableTextIds.forEach((id) => {
       const component = components.find((item) => item.id === id);
       if (!component) {
@@ -436,7 +474,17 @@ export function EditorShell({ project }: EditorShellProps) {
         return;
       }
 
-      if (isModifierPressed && ["l", "r", "e", "m"].includes(key)) {
+      if (
+        isModifierPressed &&
+        key === "z" &&
+        historyActionRef.current.at(-1) === "textAlign"
+      ) {
+        event.preventDefault();
+        undoLastChange();
+        return;
+      }
+
+      if (isModifierPressed && event.shiftKey && ["l", "r", "e"].includes(key)) {
         const textAlign =
           key === "l" ? "left" : key === "r" ? "right" : "center";
 
@@ -1915,6 +1963,7 @@ export function EditorShell({ project }: EditorShellProps) {
             onToggleImageCrop={(id) =>
               setCropEditingId((currentId) => (currentId === id ? null : id))
             }
+            onRecordTextAlignHistory={() => recordHistory("textAlign")}
             onDelete={(id) => {
               if (lockedComponentIds.has(id)) {
                 return;
@@ -3020,6 +3069,7 @@ function PropertyPanel({
   onUpdateCanvasBackground,
   isImageCropEditing,
   onToggleImageCrop,
+  onRecordTextAlignHistory,
   onOpenPresetSave,
 }: {
   components: ResumeComponent[];
@@ -3037,6 +3087,7 @@ function PropertyPanel({
   onUpdateCanvasBackground: (color: string) => void;
   isImageCropEditing: boolean;
   onToggleImageCrop: (id: string) => void;
+  onRecordTextAlignHistory: () => void;
   onOpenPresetSave: (component: ResumeComponent) => void;
 }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -3631,14 +3682,15 @@ function PropertyPanel({
                             value={String(
                               selectedComponent.props.textAlign ?? "left",
                             )}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              onRecordTextAlignHistory();
                               onUpdate(selectedComponent.id, {
                                 props: {
                                   ...selectedComponent.props,
                                   textAlign: event.target.value,
                                 },
-                              })
-                            }
+                              });
+                            }}
                             className="h-9 rounded-md border border-zinc-200 px-2"
                           >
                             <option value="left">좌측 정렬</option>
@@ -3655,6 +3707,15 @@ function PropertyPanel({
                           max={300}
                           onChange={(value) =>
                             onUpdate(selectedComponent.id, {
+                              ...(["text", "textbox", "link"].includes(
+                                selectedComponent.type,
+                              )
+                                ? {
+                                    content: resetRichTextLineSpacing(
+                                      selectedComponent.content ?? "",
+                                    ),
+                                  }
+                                : {}),
                               props: {
                                 ...selectedComponent.props,
                                 lineHeight: value,
