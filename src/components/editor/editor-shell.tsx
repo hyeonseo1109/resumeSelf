@@ -17,6 +17,7 @@ import {
   Link2,
   Lock,
   Magnet,
+  PackageOpen,
   Pencil,
   Save,
   Trash2,
@@ -27,6 +28,7 @@ import {
 import NextLink from "next/link";
 import type {
   CSSProperties,
+  FormEvent,
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
 } from "react";
@@ -74,11 +76,13 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { getPublicProjectUrl } from "@/lib/utils/site-url";
 import { richTextToPlainText, sanitizeRichTextHtml } from "@/lib/utils/rich-text";
-import type { ResumeComponent, ResumeProject } from "@/types/project";
+import type { ComponentPreset, ResumeComponent, ResumeProject } from "@/types/project";
 
 interface EditorShellProps {
   project: ResumeProject;
 }
+
+const SCROLL_CANVAS_HEADER_HEIGHT = 64;
 
 export function EditorShell({ project }: EditorShellProps) {
   const store = useMemo(() => createEditorStore(project), [project]);
@@ -138,6 +142,12 @@ export function EditorShell({ project }: EditorShellProps) {
   const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>([]);
   const [cropEditingId, setCropEditingId] = useState<string | null>(null);
   const [iconsOpen, setIconsOpen] = useState(false);
+  const [presetsOpen, setPresetsOpen] = useState(false);
+  const [presets, setPresets] = useState<ComponentPreset[]>([]);
+  const [presetsLoading, setPresetsLoading] = useState(false);
+  const [presetError, setPresetError] = useState<string | null>(null);
+  const [presetSaveTarget, setPresetSaveTarget] = useState<ResumeComponent | null>(null);
+  const [presetEditTarget, setPresetEditTarget] = useState<ComponentPreset | null>(null);
   const [lasso, setLasso] = useState<{
     startX: number;
     startY: number;
@@ -182,7 +192,11 @@ export function EditorShell({ project }: EditorShellProps) {
       const height = Math.max(
         240,
         ...pageComponents.map(
-          (component) => component.y + component.height + 72,
+          (component) =>
+            component.y +
+            component.height +
+            72 +
+            (isScrollMode ? SCROLL_CANVAS_HEADER_HEIGHT : 0),
         ),
       );
       const offset = layouts.reduce(
@@ -192,13 +206,17 @@ export function EditorShell({ project }: EditorShellProps) {
       const layout = { page, components: pageComponents, offset, height };
       return [...layouts, layout];
     }, []);
-  }, [editorProject.pages]);
+  }, [editorProject.pages, isScrollMode]);
   const renderItems = (
     isScrollMode
       ? pageLayouts.flatMap((layout) =>
           layout.components.map((component) => ({
             component,
-            displayTop: component.y + layout.offset + 44,
+            displayTop:
+              component.y +
+              layout.offset +
+              44 +
+              SCROLL_CANVAS_HEADER_HEIGHT,
           })),
         )
       : activePageComponents.map((component) => ({
@@ -1145,6 +1163,116 @@ export function EditorShell({ project }: EditorShellProps) {
     ]);
   }
 
+  async function loadPresets() {
+    setPresetsLoading(true);
+    setPresetError(null);
+
+    try {
+      const response = await fetch("/api/presets", { method: "GET" });
+      const result = (await response.json()) as {
+        presets?: ComponentPreset[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "프리셋을 불러오지 못했습니다.");
+      }
+
+      setPresets(result.presets ?? []);
+    } catch (error) {
+      setPresetError(
+        error instanceof Error ? error.message : "프리셋을 불러오지 못했습니다.",
+      );
+    } finally {
+      setPresetsLoading(false);
+    }
+  }
+
+  async function savePreset(input: {
+    title: string;
+    memo: string;
+    component: ResumeComponent;
+  }) {
+    const response = await fetch("/api/presets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const result = (await response.json()) as {
+      preset?: ComponentPreset;
+      error?: string;
+    };
+
+    if (!response.ok || !result.preset) {
+      throw new Error(result.error ?? "프리셋 저장에 실패했습니다.");
+    }
+
+    setPresets((items) => [result.preset!, ...items]);
+  }
+
+  async function updatePreset(input: {
+    id: string;
+    title: string;
+    memo: string;
+  }) {
+    const response = await fetch("/api/presets", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const result = (await response.json()) as {
+      preset?: ComponentPreset;
+      error?: string;
+    };
+
+    if (!response.ok || !result.preset) {
+      throw new Error(result.error ?? "프리셋 수정에 실패했습니다.");
+    }
+
+    setPresets((items) =>
+      items.map((item) => (item.id === result.preset!.id ? result.preset! : item)),
+    );
+  }
+
+  async function deletePreset(preset: ComponentPreset) {
+    if (!window.confirm(`'${preset.title}' 프리셋을 삭제할까요?`)) {
+      return;
+    }
+
+    const response = await fetch(`/api/presets?id=${preset.id}`, {
+      method: "DELETE",
+    });
+    const result = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      setPresetError(result.error ?? "프리셋 삭제에 실패했습니다.");
+      return;
+    }
+
+    setPresets((items) => items.filter((item) => item.id !== preset.id));
+  }
+
+  function addPresetToVisibleCenter(preset: ComponentPreset) {
+    const canvas = document.getElementById("resume-canvas");
+    const canvasTop = canvas?.getBoundingClientRect().top ?? 0;
+    const visibleCenter = (window.innerHeight / 2 - canvasTop) / canvasScale;
+    const source = preset.component;
+    const x = Math.max(24, Math.round(420 - source.width / 2));
+    const y = Math.max(88, Math.round(visibleCenter - source.height / 2));
+
+    recordHistory();
+    addComponents([
+      {
+        ...source,
+        id: crypto.randomUUID(),
+        x,
+        y,
+        props: { ...source.props },
+      },
+    ]);
+    setPresetsOpen(false);
+  }
+
   function handleHeaderNavigation(target: string) {
     if (editorProject.navigationMode === "scroll") {
       const nextPage = editorProject.pages.find((page) => page.slug === target);
@@ -1275,6 +1403,85 @@ export function EditorShell({ project }: EditorShellProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setPresetsOpen((value) => !value);
+                if (!presetsOpen && presets.length === 0) {
+                  void loadPresets();
+                }
+              }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm"
+            >
+              <PackageOpen className="size-4" />
+              프리셋
+            </button>
+            {presetsOpen ? (
+              <div className="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-lg border border-zinc-200 bg-white text-sm shadow-xl">
+                <div className="flex items-center justify-between border-b border-zinc-100 px-3 py-2">
+                  <p className="font-semibold text-zinc-950">프리셋 보관함</p>
+                  <button
+                    type="button"
+                    onClick={() => void loadPresets()}
+                    className="rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50"
+                  >
+                    새로고침
+                  </button>
+                </div>
+                <div className="max-h-80 overflow-y-auto p-2">
+                  {presetsLoading ? (
+                    <div className="grid gap-2 p-1">
+                      <div className="h-12 animate-pulse rounded-md bg-zinc-100" />
+                      <div className="h-12 animate-pulse rounded-md bg-zinc-100" />
+                    </div>
+                  ) : presetError ? (
+                    <p className="rounded-md bg-red-50 p-3 text-xs leading-5 text-red-600">
+                      {presetError}
+                    </p>
+                  ) : presets.length === 0 ? (
+                    <p className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
+                      저장된 프리셋이 없습니다. 컴포넌트를 선택한 뒤 Properties에서
+                      프리셋으로 저장해보세요.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-zinc-100">
+                      {presets.map((preset) => (
+                        <div key={preset.id} className="flex items-center gap-2 py-1">
+                          <button
+                            type="button"
+                            onClick={() => addPresetToVisibleCenter(preset)}
+                            className="min-w-0 flex-1 rounded-md px-3 py-2 text-left hover:bg-zinc-50"
+                          >
+                            <span className="block truncate font-medium text-zinc-950">
+                              {preset.title}
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                              {preset.memo || preset.component.type}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPresetEditTarget(preset)}
+                            className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void deletePreset(preset)}
+                            className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-400 hover:bg-red-50 hover:text-red-600"
+                          >
+                            삭제
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
           {!isScrollMode ? (
             <RouteSwitcher
               project={editorProject}
@@ -1509,7 +1716,10 @@ export function EditorShell({ project }: EditorShellProps) {
                           key={layout.page.id}
                           id={`editor-section-${target}`}
                           className="absolute left-0 w-full scroll-mt-6 px-12 pt-4"
-                          style={{ top: layout.offset + 12, height: 44 }}
+                          style={{
+                            top: layout.offset + SCROLL_CANVAS_HEADER_HEIGHT + 12,
+                            height: 44,
+                          }}
                         >
                           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
                             {label}
@@ -1620,6 +1830,7 @@ export function EditorShell({ project }: EditorShellProps) {
               setSelectedComponentIds((ids) => ids.filter((selectedId) => selectedId !== id));
               selectComponent(null);
             }}
+            onOpenPresetSave={setPresetSaveTarget}
           />
         ) : null}
       </div>
@@ -1638,6 +1849,259 @@ export function EditorShell({ project }: EditorShellProps) {
           onSelect={(target) => handleHeaderNavigation(target)}
         />
       ) : null}
+      {presetSaveTarget ? (
+        <PresetSaveDialog
+          component={presetSaveTarget}
+          onClose={() => setPresetSaveTarget(null)}
+          onSave={async (input) => {
+            await savePreset(input);
+            setPresetSaveTarget(null);
+          }}
+        />
+      ) : null}
+      {presetEditTarget ? (
+        <PresetEditDialog
+          preset={presetEditTarget}
+          onClose={() => setPresetEditTarget(null)}
+          onSave={async (input) => {
+            await updatePreset(input);
+            setPresetEditTarget(null);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function PresetEditDialog({
+  preset,
+  onClose,
+  onSave,
+}: {
+  preset: ComponentPreset;
+  onClose: () => void;
+  onSave: (input: {
+    id: string;
+    title: string;
+    memo: string;
+  }) => Promise<void>;
+}) {
+  const [title, setTitle] = useState(preset.title);
+  const [memo, setMemo] = useState(preset.memo);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextTitle = title.trim();
+
+    if (!nextTitle) {
+      setError("프리셋 제목을 입력해주세요.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      await onSave({
+        id: preset.id,
+        title: nextTitle,
+        memo,
+      });
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "프리셋 수정에 실패했습니다.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-zinc-950/35 px-4">
+      <form
+        onSubmit={(event) => void handleSubmit(event)}
+        className="w-full max-w-md rounded-lg border border-zinc-200 bg-white shadow-xl"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-100 px-5 py-4">
+          <div>
+            <h2 className="font-semibold text-zinc-950">프리셋 수정</h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              제목과 메모만 수정합니다. 저장된 컴포넌트 내용은 유지됩니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onClose}
+            className="inline-flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-300"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="grid gap-4 p-5">
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-zinc-700">제목</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              className="h-10 rounded-md border border-zinc-200 px-3 text-sm outline-emerald-500"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-zinc-700">메모</span>
+            <textarea
+              value={memo}
+              onChange={(event) => setMemo(event.target.value)}
+              className="min-h-20 rounded-md border border-zinc-200 p-3 text-sm outline-emerald-500"
+            />
+          </label>
+          {error ? (
+            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-zinc-100 px-5 py-4">
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onClose}
+            className="h-10 rounded-md border border-zinc-200 px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-300"
+          >
+            취소
+          </button>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="h-10 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+          >
+            {isSaving ? "수정 중..." : "수정"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function PresetSaveDialog({
+  component,
+  onClose,
+  onSave,
+}: {
+  component: ResumeComponent;
+  onClose: () => void;
+  onSave: (input: {
+    title: string;
+    memo: string;
+    component: ResumeComponent;
+  }) => Promise<void>;
+}) {
+  const [title, setTitle] = useState("");
+  const [memo, setMemo] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextTitle = title.trim();
+
+    if (!nextTitle) {
+      setError("프리셋 제목을 입력해주세요.");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      await onSave({
+        title: nextTitle,
+        memo,
+        component: {
+          ...component,
+          props: { ...component.props },
+        },
+      });
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "프리셋 저장에 실패했습니다.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] grid place-items-center bg-zinc-950/35 px-4">
+      <form
+        onSubmit={(event) => void handleSubmit(event)}
+        className="w-full max-w-md rounded-lg border border-zinc-200 bg-white shadow-xl"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-100 px-5 py-4">
+          <div>
+            <h2 className="font-semibold text-zinc-950">프리셋 저장</h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              선택한 {component.type} 컴포넌트를 보관함에 저장합니다.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onClose}
+            className="inline-flex size-8 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:text-zinc-300"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="grid gap-4 p-5">
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-zinc-700">제목</span>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="예: 인삿말"
+              className="h-10 rounded-md border border-zinc-200 px-3 text-sm outline-emerald-500"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-sm font-medium text-zinc-700">메모</span>
+            <textarea
+              value={memo}
+              onChange={(event) => setMemo(event.target.value)}
+              placeholder="어디에 쓰는 컴포넌트인지 적어두세요."
+              className="min-h-20 rounded-md border border-zinc-200 p-3 text-sm outline-emerald-500"
+            />
+          </label>
+          {error ? (
+            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex justify-end gap-2 border-t border-zinc-100 px-5 py-4">
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={onClose}
+            className="h-10 rounded-md border border-zinc-200 px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-300"
+          >
+            취소
+          </button>
+          <button
+            type="submit"
+            disabled={isSaving}
+            className="h-10 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-zinc-400"
+          >
+            {isSaving ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -2457,6 +2921,7 @@ function PropertyPanel({
   onUpdateCanvasBackground,
   isImageCropEditing,
   onToggleImageCrop,
+  onOpenPresetSave,
 }: {
   components: ResumeComponent[];
   selectedComponent: ResumeComponent | null;
@@ -2473,6 +2938,7 @@ function PropertyPanel({
   onUpdateCanvasBackground: (color: string) => void;
   isImageCropEditing: boolean;
   onToggleImageCrop: (id: string) => void;
+  onOpenPresetSave: (component: ResumeComponent) => void;
 }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -2627,6 +3093,19 @@ function PropertyPanel({
                 ? "삭제 잠금 켜짐"
                 : "삭제 잠금"}
             </button>
+
+            <div className="grid gap-1">
+              <button
+                type="button"
+                onClick={() => onOpenPresetSave(selectedComponent)}
+                className="h-9 rounded-md border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              >
+                프리셋 저장
+              </button>
+              <p className="text-xs leading-5 text-zinc-400">
+                이 컴포넌트를 저장하여 어디에서든지 불러올 수 있습니다.
+              </p>
+            </div>
 
             {selectedComponent.type === "text" || selectedComponent.type === "textbox" ? (
               <div className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">

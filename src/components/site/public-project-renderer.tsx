@@ -67,9 +67,7 @@ export function PublicProjectRenderer({
             {project.title}
           </Link>
         )}
-        {isScrollMode ? (
-          <span className="text-xs font-medium text-zinc-400">Contents</span>
-        ) : (
+        {isScrollMode ? null : (
           <nav className="flex min-w-0 flex-wrap justify-end gap-2">
             {project.navigation.map((item) => (
               <Link

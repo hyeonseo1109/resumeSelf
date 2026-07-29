@@ -51,6 +51,18 @@ create table if not exists public.fonts (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.presets (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.users(id) on delete cascade,
+  title text not null,
+  memo text not null default '',
+  component jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists presets_owner_id_idx on public.presets(owner_id);
+
 insert into storage.buckets (id, name, public)
 values ('project-media', 'project-media', true)
 on conflict (id) do update set public = true;
@@ -59,6 +71,7 @@ alter table public.users enable row level security;
 alter table public.projects enable row level security;
 alter table public.media enable row level security;
 alter table public.fonts enable row level security;
+alter table public.presets enable row level security;
 
 drop policy if exists "Users can read own profile" on public.users;
 create policy "Users can read own profile" on public.users
@@ -85,6 +98,10 @@ create policy "Users can manage own media" on public.media
   for all using (
     exists (select 1 from public.projects where projects.id = media.project_id and projects.owner_id = auth.uid())
   );
+
+drop policy if exists "Users can manage own presets" on public.presets;
+create policy "Users can manage own presets" on public.presets
+  for all using ((select auth.uid()) = owner_id) with check ((select auth.uid()) = owner_id);
 
 drop policy if exists "Project media is publicly readable" on storage.objects;
 create policy "Project media is publicly readable" on storage.objects

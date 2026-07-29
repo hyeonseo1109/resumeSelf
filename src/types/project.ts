@@ -69,3 +69,12 @@ export interface ResumeProject {
   updatedAt: string;
   publishedAt: string | null;
 }
+
+export interface ComponentPreset {
+  id: string;
+  title: string;
+  memo: string;
+  component: ResumeComponent;
+  createdAt: string;
+  updatedAt: string;
+}

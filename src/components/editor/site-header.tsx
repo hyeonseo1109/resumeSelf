@@ -23,9 +23,7 @@ export function SiteHeader({
       >
         {project.title}
       </button>
-      {project.navigationMode === "scroll" ? (
-        <span className="text-xs font-medium text-zinc-400">Scroll Mode</span>
-      ) : (
+      {project.navigationMode === "scroll" ? null : (
         <nav className="flex flex-wrap items-center justify-end gap-2">
           {project.navigation.map((item) => (
             <a
