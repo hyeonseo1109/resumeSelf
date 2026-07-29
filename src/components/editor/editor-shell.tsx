@@ -3163,7 +3163,7 @@ function CanvasComponent({
           href={String(component.props.href ?? "#")}
           target="_blank"
           rel="noreferrer"
-          className="flex h-full w-full items-center border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
+          className="flex h-full w-full min-w-0 items-center overflow-hidden border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 underline-offset-4 hover:underline"
           style={{
             ...textStyle,
             borderRadius,
@@ -3178,8 +3178,17 @@ function CanvasComponent({
             ),
             color: String(component.props.color ?? "#18181b"),
           }}
-          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "링크") }}
-        />
+        >
+          <span
+            className="resume-link-content"
+            dangerouslySetInnerHTML={{
+              __html: sanitizeRichTextHtml(component.content ?? "링크").replace(
+                /<\/?a\b[^>]*>/gi,
+                "",
+              ),
+            }}
+          />
+        </a>
       ) : component.type === "popup" ? (
         <button
           type="button"

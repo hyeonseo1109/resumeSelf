@@ -104,3 +104,21 @@ select {
   border: 0;
   border-radius: 0.25rem;
 }
+
+.resume-link-content,
+.resume-link-content * {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.resume-link-content {
+  display: block;
+  width: 100%;
+}
+
+.resume-link-content p {
+  margin: 0;
+}

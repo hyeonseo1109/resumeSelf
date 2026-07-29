@@ -172,12 +172,19 @@ export function PublicComponent({
             borderRadius,
             backgroundColor: withAlpha(String(component.props.backgroundColor ?? "#ffffff"), Number(component.props.backgroundOpacity ?? 100)),
             color: String(component.props.color ?? "#18181b"),
-            overflowWrap: "anywhere",
-            wordBreak: "break-word",
-            whiteSpace: "normal",
           }}
-          dangerouslySetInnerHTML={{ __html: sanitizeLinkLabelHtml(component.content ?? "링크") }}
-        />
+        >
+          <span
+            className="resume-link-content"
+            style={{
+              overflowWrap: "anywhere",
+              wordBreak: "break-word",
+            }}
+            dangerouslySetInnerHTML={{
+              __html: sanitizeLinkLabelHtml(component.content ?? "링크"),
+            }}
+          />
+        </a>
       ) : component.type === "popup" ? (
         <button
           type="button"

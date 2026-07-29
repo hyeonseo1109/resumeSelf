@@ -23,6 +23,25 @@ function sanitizeLinkLabelHtml(value: string) {
   return sanitizeRichTextHtml(value).replace(/<\/?a\b[^>]*>/gi, "");
 }
 
+function applyLinkWrapping(element: HTMLElement) {
+  element.style.minWidth = "0";
+  element.style.maxWidth = "100%";
+  element.style.whiteSpace = "normal";
+  element.style.overflowWrap = "anywhere";
+  element.style.wordBreak = "break-word";
+
+  element.querySelectorAll<HTMLElement>("*").forEach((child) => {
+    child.style.minWidth = "0";
+    child.style.maxWidth = "100%";
+    child.style.whiteSpace = "normal";
+    child.style.overflowWrap = "anywhere";
+    child.style.wordBreak = "break-word";
+    if (child.tagName.toLowerCase() === "p") {
+      child.style.margin = "0";
+    }
+  });
+}
+
 export function createPdfExportNode({
   project,
   activePage,
@@ -340,7 +359,16 @@ function createPdfComponent(component: ResumeComponent, top: number) {
     frame.style.wordBreak = "break-word";
     frame.style.whiteSpace = "normal";
     frame.style.padding = "8px 16px";
-    frame.innerHTML = sanitizeLinkLabelHtml(component.content ?? "링크");
+    const label = document.createElement("span");
+    label.style.display = "block";
+    label.style.minWidth = "0";
+    label.style.maxWidth = "100%";
+    label.style.whiteSpace = "normal";
+    label.style.overflowWrap = "anywhere";
+    label.style.wordBreak = "break-word";
+    label.innerHTML = sanitizeLinkLabelHtml(component.content ?? "링크");
+    applyLinkWrapping(label);
+    frame.appendChild(label);
     return frame;
   }
 
