@@ -1,8 +1,13 @@
 "use client";
 
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type {
+  ClipboardEvent as ReactClipboardEvent,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { useState } from "react";
 import {
+  clearTableRange,
+  extractTableRange,
   getSelectedTableCell,
   getSelectedTableRange,
   getTableColWidths,
@@ -12,13 +17,20 @@ import {
   getTableRows,
   insertTableCol,
   insertTableRow,
+  isMultiCellRange,
+  parseTsvToTableData,
+  pasteTableRange,
   parseTableData,
   serializeTableData,
+  serializeTableRangeAsTsv,
   serializeTableSizes,
+  type TableData,
   updateTableCellText,
 } from "@/features/editor/table";
 import { cn } from "@/lib/utils/cn";
 import type { ResumeComponent } from "@/types/project";
+
+const TABLE_CLIPBOARD_MIME = "application/x-resumeself-table";
 
 export function TableComponent({
   component,
@@ -107,17 +119,120 @@ export function TableComponent({
     });
   }
 
-  function addRow(index: number) {
-    const nextData = insertTableRow(data, index, cols);
+  function readClipboardTableData(event: ReactClipboardEvent<HTMLDivElement>) {
+    const serialized = event.clipboardData.getData(TABLE_CLIPBOARD_MIME);
+    const plainText = event.clipboardData.getData("text/plain");
+
+    if (serialized) {
+      try {
+        const parsed = JSON.parse(serialized) as TableData;
+        if (Array.isArray(parsed) && Array.isArray(parsed[0])) {
+          return parsed;
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    if (
+      plainText.includes("\t") ||
+      plainText.includes("\n") ||
+      isMultiCellRange(selectedRange)
+    ) {
+      return parseTsvToTableData(plainText);
+    }
+
+    return null;
+  }
+
+  function copySelectedRange(event: ReactClipboardEvent<HTMLDivElement>) {
+    if (preview || !isTableSelected || !isMultiCellRange(selectedRange)) {
+      return false;
+    }
+
+    const copiedData = extractTableRange(data, selectedRange);
+    event.clipboardData.setData(
+      TABLE_CLIPBOARD_MIME,
+      JSON.stringify(copiedData),
+    );
+    event.clipboardData.setData(
+      "text/plain",
+      serializeTableRangeAsTsv(copiedData),
+    );
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  }
+
+  function cutSelectedRange(event: ReactClipboardEvent<HTMLDivElement>) {
+    if (!copySelectedRange(event)) {
+      return;
+    }
+
     onUpdate({
       props: {
         ...component.props,
+        tableData: serializeTableData(clearTableRange(data, selectedRange)),
+      },
+    });
+  }
+
+  function pasteSelectedRange(event: ReactClipboardEvent<HTMLDivElement>) {
+    if (preview || !isTableSelected) {
+      return;
+    }
+
+    const clipboardData = readClipboardTableData(event);
+    if (!clipboardData) {
+      return;
+    }
+
+    const startRow = selectedRange.startRow;
+    const startCol = selectedRange.startCol;
+    const pastedRows = clipboardData.length;
+    const pastedCols = Math.max(
+      1,
+      ...clipboardData.map((row) => row.length),
+    );
+    const endRow = Math.min(rows - 1, startRow + pastedRows - 1);
+    const endCol = Math.min(cols - 1, startCol + pastedCols - 1);
+
+    onUpdate({
+      props: {
+        ...component.props,
+        tableData: serializeTableData(
+          pasteTableRange(data, startRow, startCol, clipboardData),
+        ),
+        selectedCellRow: startRow,
+        selectedCellCol: startCol,
+        selectedCellStartRow: startRow,
+        selectedCellStartCol: startCol,
+        selectedCellEndRow: endRow,
+        selectedCellEndCol: endCol,
+      },
+    });
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function addRow(index: number) {
+    const nextData = insertTableRow(data, index, cols);
+    const nextRowHeights = [
+      ...rowHeights.slice(0, index),
+      Math.max(42, component.height / Math.max(1, rows + 1)),
+      ...rowHeights.slice(index),
+    ];
+    const nextHeight = nextRowHeights.reduce(
+      (total, height) => total + height,
+      0,
+    );
+
+    onUpdate({
+      height: nextHeight,
+      props: {
+        ...component.props,
         tableRows: rows + 1,
-        tableRowHeights: serializeTableSizes([
-          ...rowHeights.slice(0, index),
-          Math.max(42, component.height / Math.max(1, rows + 1)),
-          ...rowHeights.slice(index),
-        ]),
+        tableRowHeights: serializeTableSizes(nextRowHeights),
         tableData: serializeTableData(nextData),
         selectedCellRow: index,
         selectedCellCol: Math.min(selectedCell.col, cols - 1),
@@ -128,15 +243,19 @@ export function TableComponent({
 
   function addCol(index: number) {
     const nextData = insertTableCol(data, index);
+    const nextColWidths = [
+      ...colWidths.slice(0, index),
+      Math.max(72, component.width / Math.max(1, cols + 1)),
+      ...colWidths.slice(index),
+    ];
+    const nextWidth = nextColWidths.reduce((total, width) => total + width, 0);
+
     onUpdate({
+      width: nextWidth,
       props: {
         ...component.props,
         tableCols: cols + 1,
-        tableColWidths: serializeTableSizes([
-          ...colWidths.slice(0, index),
-          Math.max(72, component.width / Math.max(1, cols + 1)),
-          ...colWidths.slice(index),
-        ]),
+        tableColWidths: serializeTableSizes(nextColWidths),
         tableData: serializeTableData(nextData),
         selectedCellRow: Math.min(selectedCell.row, rows - 1),
         selectedCellCol: index,
@@ -233,6 +352,9 @@ export function TableComponent({
   return (
     <div
       className="relative h-full w-full"
+      onCopyCapture={copySelectedRange}
+      onCutCapture={cutSelectedRange}
+      onPasteCapture={pasteSelectedRange}
       onContextMenu={(event) => {
         if (preview) {
           return;

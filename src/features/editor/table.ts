@@ -9,6 +9,8 @@ export type TableCell = {
 
 export type TableData = TableCell[][];
 
+export type TableRange = ReturnType<typeof getSelectedTableRange>;
+
 export function createDefaultTableData(rows = 2, cols = 2): TableData {
   return Array.from({ length: rows }, () =>
     Array.from({ length: cols }, () => ({ text: "" })),
@@ -146,6 +148,81 @@ export function resizeTableData(data: TableData, rows: number, cols: number) {
       backgroundColor: data[rowIndex]?.[colIndex]?.backgroundColor,
       textAlign: data[rowIndex]?.[colIndex]?.textAlign,
     })),
+  );
+}
+
+export function isMultiCellRange(range: TableRange) {
+  return range.startRow !== range.endRow || range.startCol !== range.endCol;
+}
+
+export function extractTableRange(data: TableData, range: TableRange) {
+  return data
+    .slice(range.startRow, range.endRow + 1)
+    .map((row) =>
+      row
+        .slice(range.startCol, range.endCol + 1)
+        .map((cell) => ({ ...cell })),
+    );
+}
+
+export function serializeTableRangeAsTsv(data: TableData) {
+  return data
+    .map((row) =>
+      row
+        .map((cell) =>
+          cell.text
+            .replace(/\r\n/g, "\n")
+            .replace(/\r/g, "\n")
+            .replace(/\t/g, " "),
+        )
+        .join("\t"),
+    )
+    .join("\n");
+}
+
+export function parseTsvToTableData(value: string) {
+  const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  return normalized.split("\n").map((row) =>
+    row.split("\t").map((text) => ({
+      text,
+    })),
+  );
+}
+
+export function clearTableRange(data: TableData, range: TableRange) {
+  return data.map((row, rowIndex) =>
+    row.map((cell, colIndex) =>
+      rowIndex >= range.startRow &&
+      rowIndex <= range.endRow &&
+      colIndex >= range.startCol &&
+      colIndex <= range.endCol
+        ? { ...cell, text: "" }
+        : cell,
+    ),
+  );
+}
+
+export function pasteTableRange(
+  data: TableData,
+  startRow: number,
+  startCol: number,
+  source: TableData,
+) {
+  return data.map((row, rowIndex) =>
+    row.map((cell, colIndex) => {
+      const sourceRow = rowIndex - startRow;
+      const sourceCol = colIndex - startCol;
+      const nextCell = source[sourceRow]?.[sourceCol];
+
+      if (!nextCell) {
+        return cell;
+      }
+
+      return {
+        ...cell,
+        ...nextCell,
+      };
+    }),
   );
 }
 
