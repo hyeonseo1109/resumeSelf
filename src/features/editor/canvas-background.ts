@@ -12,7 +12,7 @@ export function getCanvasBackgroundStyle(page?: ResumePage | null) {
     return {
       mode: "solid",
       color: solidColor,
-      points: [],
+      points: page?.canvasBackgroundStyle?.points ?? [],
     } satisfies CanvasBackgroundStyle;
   }
 

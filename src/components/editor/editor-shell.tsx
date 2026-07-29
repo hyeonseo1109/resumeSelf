@@ -3586,7 +3586,7 @@ function CanvasBackgroundControl({
     updateStyle({
       mode,
       color: canvasBackgroundStyle.color || canvasBackground,
-      points: mode === "gradient" ? canvasBackgroundStyle.points : [],
+      points: canvasBackgroundStyle.points,
     });
   }
 
@@ -3594,11 +3594,22 @@ function CanvasBackgroundControl({
     updateStyle({
       ...canvasBackgroundStyle,
       color,
-      points:
-        canvasBackgroundStyle.mode === "gradient"
-          ? canvasBackgroundStyle.points
-          : [],
+      points: canvasBackgroundStyle.points,
     });
+  }
+
+  function clearGradientPoints() {
+    if (canvasBackgroundStyle.points.length === 0) {
+      return;
+    }
+
+    recordPointHistory();
+    updateStyle({
+      ...canvasBackgroundStyle,
+      mode: "gradient",
+      points: [],
+    });
+    setActivePointId(null);
   }
 
   function getMinimapPoint(event: ReactPointerEvent<HTMLDivElement>) {
@@ -3818,7 +3829,17 @@ function CanvasBackgroundControl({
       </label>
       {canvasBackgroundStyle.mode === "gradient" ? (
         <div className="grid gap-2">
-          <span className="text-zinc-500">그라데이션 편집</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-zinc-500">그라데이션 편집</span>
+            <button
+              type="button"
+              disabled={canvasBackgroundStyle.points.length === 0}
+              onClick={clearGradientPoints}
+              className="rounded-md border border-zinc-200 px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-300"
+            >
+              전체 지우기
+            </button>
+          </div>
           <div
             ref={pointScrollRef}
             tabIndex={0}
