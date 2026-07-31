@@ -333,6 +333,26 @@ export function reorderTableRow(data: TableData, fromIndex: number, toIndex: num
   return nextData;
 }
 
+export function reorderTableCol(data: TableData, fromIndex: number, toIndex: number) {
+  const colCount = Math.max(1, data[0]?.length ?? 1);
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= colCount ||
+    toIndex >= colCount
+  ) {
+    return data;
+  }
+
+  return data.map((row) => {
+    const nextRow = [...row];
+    const [movedCell] = nextRow.splice(fromIndex, 1);
+    nextRow.splice(toIndex, 0, movedCell ?? { text: "" });
+    return nextRow;
+  });
+}
+
 export function reorderTableSize(sizes: number[], fromIndex: number, toIndex: number) {
   if (
     fromIndex === toIndex ||

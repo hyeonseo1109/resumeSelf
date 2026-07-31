@@ -6,7 +6,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from "react";
 import { useEffect, useRef, useState } from "react";
-import { GripVertical } from "lucide-react";
+import { GripHorizontal, GripVertical } from "lucide-react";
 import {
   clearTableRange,
   deleteTableCols,
@@ -25,6 +25,7 @@ import {
   parseTsvToTableData,
   pasteTableRange,
   parseTableData,
+  reorderTableCol,
   reorderTableRow,
   reorderTableSize,
   serializeTableData,
@@ -83,6 +84,8 @@ export function TableComponent({
   } | null>(null);
   const [draggingRow, setDraggingRow] = useState<number | null>(null);
   const [rowDropIndex, setRowDropIndex] = useState<number | null>(null);
+  const [draggingCol, setDraggingCol] = useState<number | null>(null);
+  const [colDropIndex, setColDropIndex] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const data = parseTableData(component);
@@ -479,10 +482,36 @@ export function TableComponent({
     return rowHeights.length - 1;
   }
 
+  function getColIndexFromClientX(clientX: number) {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return 0;
+    }
+
+    const localX = (clientX - rect.left) / interactionScale;
+    let accumulated = 0;
+
+    for (let index = 0; index < colWidths.length; index += 1) {
+      accumulated += colWidths[index] ?? 0;
+      if (localX < accumulated) {
+        return index;
+      }
+    }
+
+    return colWidths.length - 1;
+  }
+
   function selectRow(rowIndex: number) {
     selectCellRange(
       { row: rowIndex, col: 0 },
       { row: rowIndex, col: Math.max(0, cols - 1) },
+    );
+  }
+
+  function selectCol(colIndex: number) {
+    selectCellRange(
+      { row: 0, col: colIndex },
+      { row: Math.max(0, rows - 1), col: colIndex },
     );
   }
 
@@ -532,6 +561,60 @@ export function TableComponent({
           selectedCellStartCol: 0,
           selectedCellEndRow: nextIndex,
           selectedCellEndCol: Math.max(0, cols - 1),
+        },
+      });
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+  }
+
+  function startColReorder(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    colIndex: number,
+  ) {
+    if (preview || cols <= 1) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    onSelect();
+    onResizeStart?.();
+    selectCol(colIndex);
+    setDraggingCol(colIndex);
+    setColDropIndex(colIndex);
+
+    function handlePointerMove(pointerEvent: PointerEvent) {
+      setColDropIndex(getColIndexFromClientX(pointerEvent.clientX));
+    }
+
+    function handlePointerUp(pointerEvent: PointerEvent) {
+      const nextIndex = getColIndexFromClientX(pointerEvent.clientX);
+
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      setDraggingCol(null);
+      setColDropIndex(null);
+
+      if (nextIndex === colIndex) {
+        return;
+      }
+
+      const nextData = reorderTableCol(data, colIndex, nextIndex);
+      const nextColWidths = reorderTableSize(colWidths, colIndex, nextIndex);
+
+      onUpdate({
+        props: {
+          ...component.props,
+          tableData: serializeTableData(nextData),
+          tableColWidths: serializeTableSizes(nextColWidths),
+          selectedCellRow: 0,
+          selectedCellCol: nextIndex,
+          selectedCellStartRow: 0,
+          selectedCellStartCol: nextIndex,
+          selectedCellEndRow: Math.max(0, rows - 1),
+          selectedCellEndCol: nextIndex,
         },
       });
     }
@@ -707,6 +790,42 @@ export function TableComponent({
                 <GripVertical className="size-3.5" />
                 {isDropTarget && draggingRow !== null ? (
                   <span className="pointer-events-none absolute -right-[calc(100%+0.5rem)] top-1/2 h-0.5 w-[calc(100vw)] -translate-y-1/2 bg-emerald-400/70" />
+                ) : null}
+              </button>
+            );
+          })
+        : null}
+      {isTableSelected && !preview
+        ? colWidths.map((width, colIndex) => {
+            const left = colWidths
+              .slice(0, colIndex)
+              .reduce((total, colWidth) => total + colWidth, 0);
+            const isDragged = draggingCol === colIndex;
+            const isDropTarget = colDropIndex === colIndex;
+
+            return (
+              <button
+                key={`col-reorder-${colIndex}`}
+                type="button"
+                data-editor-control="true"
+                aria-label={`${colIndex + 1}열 순서 변경`}
+                title="열 순서 변경"
+                className={cn(
+                  "absolute -top-8 z-50 flex h-6 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-400 shadow-sm transition hover:border-emerald-400 hover:text-emerald-600",
+                  cols <= 1 && "cursor-not-allowed opacity-40",
+                  cols > 1 && "cursor-grab active:cursor-grabbing",
+                  isDragged && "border-emerald-500 bg-emerald-50 text-emerald-700",
+                )}
+                style={{
+                  left: left + 3,
+                  width: Math.max(24, width - 6),
+                }}
+                onPointerDown={(event) => startColReorder(event, colIndex)}
+                onClick={() => selectCol(colIndex)}
+              >
+                <GripHorizontal className="size-3.5" />
+                {isDropTarget && draggingCol !== null ? (
+                  <span className="pointer-events-none absolute -bottom-[calc(100%+0.5rem)] left-1/2 h-[calc(100vh)] w-0.5 -translate-x-1/2 bg-emerald-400/70" />
                 ) : null}
               </button>
             );

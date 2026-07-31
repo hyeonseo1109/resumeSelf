@@ -36,6 +36,11 @@ export function getPublicProjectUrl(slug: string) {
   return `${origin}/${slug.replace(/^\/+/, "")}`;
 }
 
+export function getTemplateShareUrl(slug: string) {
+  const origin = getBrowserSiteOrigin();
+  return `${origin}/templates/${slug.replace(/^\/+/, "")}`;
+}
+
 export function getAuthCallbackUrl(next = "/dashboard") {
   const origin = getCurrentBrowserOrigin();
   const callbackUrl = new URL("/auth/callback", origin);

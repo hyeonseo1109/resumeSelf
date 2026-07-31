@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { PublicProjectRenderer } from "@/components/site/public-project-renderer";
 import { getPublicProjectBySlug } from "@/server/projects";
 
-export const revalidate = 15;
+export const revalidate = 300;
 
 export default async function PublicNestedPage({
   params,

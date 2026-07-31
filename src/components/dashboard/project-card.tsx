@@ -9,11 +9,13 @@ import {
   FilePenLine,
   Lock,
   Pencil,
+  Share2,
   StickyNote,
   Unlock,
 } from "lucide-react";
 import { DeleteProjectButton } from "@/components/dashboard/delete-project-button";
 import { cn } from "@/lib/utils/cn";
+import { getTemplateShareUrl } from "@/lib/utils/site-url";
 import type { ResumeProject } from "@/types/project";
 
 export function ProjectCard({
@@ -43,6 +45,9 @@ export function ProjectCard({
   const [deleteLocked, setDeleteLocked] = useState(
     project.deleteLocked === true,
   );
+  const [templateShareStatus, setTemplateShareStatus] = useState<
+    "idle" | "copied" | "error"
+  >("idle");
 
   function getAvailableTitle(value: string) {
     const baseTitle = value.trim();
@@ -91,6 +96,17 @@ export function ProjectCard({
     ) {
       input.value = availableTitle;
       event.currentTarget.requestSubmit();
+    }
+  }
+
+  async function copyTemplateShareUrl() {
+    try {
+      await navigator.clipboard.writeText(getTemplateShareUrl(project.slug));
+      setTemplateShareStatus("copied");
+      window.setTimeout(() => setTemplateShareStatus("idle"), 1800);
+    } catch {
+      setTemplateShareStatus("error");
+      window.setTimeout(() => setTemplateShareStatus("idle"), 2200);
     }
   }
 
@@ -193,6 +209,18 @@ export function ProjectCard({
           <ExternalLink className="size-4" />
           열기
         </Link>
+        <button
+          type="button"
+          onClick={() => void copyTemplateShareUrl()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700"
+        >
+          <Share2 className="size-4" />
+          {templateShareStatus === "copied"
+            ? "템플릿 링크 복사됨"
+            : templateShareStatus === "error"
+              ? "복사 실패"
+              : "템플릿 공유"}
+        </button>
         <form action={duplicateAction}>
           <input type="hidden" name="projectId" value={project.id} />
           <button

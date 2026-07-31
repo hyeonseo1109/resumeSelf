@@ -21,6 +21,7 @@ import {
   PackageOpen,
   Pencil,
   Save,
+  Share2,
   Trash2,
   Unlock,
   Upload,
@@ -90,7 +91,7 @@ import {
   withAlpha,
 } from "@/features/editor/view-helpers";
 import { cn } from "@/lib/utils/cn";
-import { getPublicProjectUrl } from "@/lib/utils/site-url";
+import { getPublicProjectUrl, getTemplateShareUrl } from "@/lib/utils/site-url";
 import {
   resetRichTextLineSpacing,
   richTextToPlainText,
@@ -198,6 +199,9 @@ export function EditorShell({ project }: EditorShellProps) {
   const [shareStatus, setShareStatus] = useState<"idle" | "copied" | "error">(
     "idle",
   );
+  const [templateShareStatus, setTemplateShareStatus] = useState<
+    "idle" | "copied" | "error"
+  >("idle");
   const [activeTocTarget, setActiveTocTarget] = useState(
     editorProject.navigation[0]?.target ?? "",
   );
@@ -1753,6 +1757,19 @@ export function EditorShell({ project }: EditorShellProps) {
     }
   }
 
+  async function shareTemplateUrl() {
+    const url = getTemplateShareUrl(editorProject.slug);
+
+    try {
+      await navigator.clipboard.writeText(url);
+      setTemplateShareStatus("copied");
+      window.setTimeout(() => setTemplateShareStatus("idle"), 1800);
+    } catch {
+      setTemplateShareStatus("error");
+      window.setTimeout(() => setTemplateShareStatus("idle"), 2200);
+    }
+  }
+
   async function uploadMedia(
     componentId: string,
     file: File,
@@ -1982,6 +1999,18 @@ export function EditorShell({ project }: EditorShellProps) {
               : shareStatus === "error"
                 ? "복사 실패"
                 : "URL 공유"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void shareTemplateUrl()}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm"
+          >
+            <Share2 className="size-4" />
+            {templateShareStatus === "copied"
+              ? "복사됨"
+              : templateShareStatus === "error"
+                ? "복사 실패"
+                : "템플릿 공유"}
           </button>
         </div>
       </header>

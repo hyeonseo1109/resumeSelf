@@ -67,8 +67,8 @@ function mapProject(data: {
   owner_id: string;
   title: string;
   slug: string;
-  memo: string | null;
-  delete_locked: boolean | null;
+  memo?: string | null;
+  delete_locked?: boolean | null;
   mode: ProjectMode;
   navigation_mode: ResumeProject["navigationMode"];
   navigation: NavigationItem[] | null;
@@ -152,7 +152,7 @@ async function getPublicProjectBySlugUncached(slug: string): Promise<ResumeProje
 
   const { data, error } = await supabase
     .from("projects")
-    .select("id, owner_id, title, slug, memo, delete_locked, mode, navigation_mode, navigation, pages, updated_at, published_at")
+    .select("id, owner_id, title, slug, mode, navigation_mode, navigation, pages, updated_at, published_at")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -167,7 +167,7 @@ export const getPublicProjectBySlug = unstable_cache(
   getPublicProjectBySlugUncached,
   ["public-project-by-slug"],
   {
-    revalidate: 15,
+    revalidate: 300,
     tags: ["public-projects"],
   },
 );

@@ -75,7 +75,7 @@ function applyRichTextSpacing(element: HTMLElement, component: ResumeComponent) 
 }
 
 function getPdfVerticalAlignNudge(value: unknown) {
-  return String(value ?? "top") === "middle" ? "translateY(-0.22em)" : "";
+  return String(value ?? "top") === "middle" ? "translateY(-0.36em)" : "";
 }
 
 function applyPdfTextRendering(element: HTMLElement) {
