@@ -138,10 +138,7 @@ class EditorPointerSensor extends PointerSensor {
   static activators = [
     {
       eventName: "onPointerDown" as const,
-      handler: (
-        event: ReactPointerEvent,
-        options: PointerSensorOptions,
-      ) => {
+      handler: (event: ReactPointerEvent, options: PointerSensorOptions) => {
         if (isEditorInteractiveTarget(event.target)) {
           return false;
         }
@@ -210,7 +207,9 @@ export function EditorShell({ project }: EditorShellProps) {
   const [spacingGuides, setSpacingGuides] = useState<SpacingGuide[]>([]);
   const [guidePopupId, setGuidePopupId] = useState<string | null>(null);
   const [canvasScale, setCanvasScale] = useState(1);
-  const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>([]);
+  const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>(
+    [],
+  );
   const [cropEditingId, setCropEditingId] = useState<string | null>(null);
   const [iconsOpen, setIconsOpen] = useState(false);
   const [presetsOpen, setPresetsOpen] = useState(false);
@@ -218,15 +217,18 @@ export function EditorShell({ project }: EditorShellProps) {
   const [presetsLoaded, setPresetsLoaded] = useState(false);
   const [presetsLoading, setPresetsLoading] = useState(false);
   const [presetError, setPresetError] = useState<string | null>(null);
-  const [presetSaveTarget, setPresetSaveTarget] = useState<ResumeComponent | null>(null);
-  const [presetEditTarget, setPresetEditTarget] = useState<ComponentPreset | null>(null);
+  const [presetSaveTarget, setPresetSaveTarget] =
+    useState<ResumeComponent | null>(null);
+  const [presetEditTarget, setPresetEditTarget] =
+    useState<ComponentPreset | null>(null);
   const [lasso, setLasso] = useState<{
     startX: number;
     startY: number;
     currentX: number;
     currentY: number;
   } | null>(null);
-  const [pendingInsertType, setPendingInsertType] = useState<ComponentType | null>(null);
+  const [pendingInsertType, setPendingInsertType] =
+    useState<ComponentType | null>(null);
   const [insertDraft, setInsertDraft] = useState<{
     startX: number;
     startY: number;
@@ -334,7 +336,8 @@ export function EditorShell({ project }: EditorShellProps) {
     [components],
   );
   const activeCropEditingId =
-    selectedComponent?.type === "image" && selectedComponent.id === cropEditingId
+    selectedComponent?.type === "image" &&
+    selectedComponent.id === cropEditingId
       ? cropEditingId
       : null;
 
@@ -450,7 +453,9 @@ export function EditorShell({ project }: EditorShellProps) {
     const relatedIds = new Set(ids);
 
     ids.forEach((id) => {
-      const popup = components.find((component) => component.id === id && component.type === "popup");
+      const popup = components.find(
+        (component) => component.id === id && component.type === "popup",
+      );
       if (!popup) {
         return;
       }
@@ -465,11 +470,16 @@ export function EditorShell({ project }: EditorShellProps) {
 
   function cloneComponentsForPaste(sourceComponents: ResumeComponent[]) {
     const idMap = new Map<string, string>();
-    sourceComponents.forEach((component) => idMap.set(component.id, crypto.randomUUID()));
+    sourceComponents.forEach((component) =>
+      idMap.set(component.id, crypto.randomUUID()),
+    );
 
     return sourceComponents.map((component) => {
       const nextId = idMap.get(component.id) ?? crypto.randomUUID();
-      const popupId = typeof component.props.popupId === "string" ? component.props.popupId : null;
+      const popupId =
+        typeof component.props.popupId === "string"
+          ? component.props.popupId
+          : null;
       const isClonedPopupChild = Boolean(popupId && idMap.has(popupId));
 
       return {
@@ -479,7 +489,10 @@ export function EditorShell({ project }: EditorShellProps) {
         y: isClonedPopupChild ? component.y : component.y + 28,
         props: {
           ...component.props,
-          popupId: popupId && idMap.has(popupId) ? idMap.get(popupId)! : component.props.popupId,
+          popupId:
+            popupId && idMap.has(popupId)
+              ? idMap.get(popupId)!
+              : component.props.popupId,
         },
       };
     });
@@ -487,7 +500,9 @@ export function EditorShell({ project }: EditorShellProps) {
 
   function copySelectedComponents() {
     const ids = getPopupRelatedIds(selectedComponentIds);
-    copyBufferRef.current = components.filter((component) => ids.includes(component.id));
+    copyBufferRef.current = components.filter((component) =>
+      ids.includes(component.id),
+    );
   }
 
   function pasteCopiedComponents() {
@@ -501,7 +516,10 @@ export function EditorShell({ project }: EditorShellProps) {
     const pastedRootIds = clonedComponents
       .filter((component) => !component.props.popupId)
       .map((component) => component.id);
-    const idsToSelect = pastedRootIds.length > 0 ? pastedRootIds : clonedComponents.map((component) => component.id);
+    const idsToSelect =
+      pastedRootIds.length > 0
+        ? pastedRootIds
+        : clonedComponents.map((component) => component.id);
     setSelectedComponentIds(idsToSelect);
     selectComponent(idsToSelect[0] ?? null);
   }
@@ -525,7 +543,10 @@ export function EditorShell({ project }: EditorShellProps) {
     setSelectedComponentIds((ids) =>
       ids.filter((id) => !removableSelectedIds.includes(id)),
     );
-    if (selectedComponentId && removableSelectedIds.includes(selectedComponentId)) {
+    if (
+      selectedComponentId &&
+      removableSelectedIds.includes(selectedComponentId)
+    ) {
       selectComponent(null);
     }
   }
@@ -638,7 +659,11 @@ export function EditorShell({ project }: EditorShellProps) {
         return;
       }
 
-      if (isModifierPressed && event.shiftKey && ["l", "r", "e"].includes(key)) {
+      if (
+        isModifierPressed &&
+        event.shiftKey &&
+        ["l", "r", "e"].includes(key)
+      ) {
         const textAlign =
           key === "l" ? "left" : key === "r" ? "right" : "center";
 
@@ -906,7 +931,9 @@ export function EditorShell({ project }: EditorShellProps) {
     return typeof component.props.popupId === "string" ? 1 : canvasScale;
   }
 
-  function getCanvasPoint(event: PointerEvent | ReactPointerEvent<HTMLElement>) {
+  function getCanvasPoint(
+    event: PointerEvent | ReactPointerEvent<HTMLElement>,
+  ) {
     const canvas = document.getElementById("resume-canvas");
     const rect = canvas?.getBoundingClientRect();
 
@@ -942,7 +969,12 @@ export function EditorShell({ project }: EditorShellProps) {
     a: { left: number; top: number; right: number; bottom: number },
     b: { left: number; top: number; right: number; bottom: number },
   ) {
-    return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+    return (
+      a.left <= b.right &&
+      a.right >= b.left &&
+      a.top <= b.bottom &&
+      a.bottom >= b.top
+    );
   }
 
   function getInsertTarget(rect: {
@@ -1092,7 +1124,12 @@ export function EditorShell({ project }: EditorShellProps) {
     const start = getCanvasPoint(event);
     setSelectedComponentIds([]);
     selectComponent(null);
-    setLasso({ startX: start.x, startY: start.y, currentX: start.x, currentY: start.y });
+    setLasso({
+      startX: start.x,
+      startY: start.y,
+      currentX: start.x,
+      currentY: start.y,
+    });
 
     function handlePointerMove(pointerEvent: PointerEvent) {
       const point = getCanvasPoint(pointerEvent);
@@ -1443,7 +1480,11 @@ export function EditorShell({ project }: EditorShellProps) {
     );
     setGuideLines(snap.guides);
     setSpacingGuides(getSpacingGuides(component, snap.x, snap.y));
-    setGuidePopupId(typeof component.props.popupId === "string" ? component.props.popupId : null);
+    setGuidePopupId(
+      typeof component.props.popupId === "string"
+        ? component.props.popupId
+        : null,
+    );
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -1461,14 +1502,21 @@ export function EditorShell({ project }: EditorShellProps) {
     );
     setGuideLines(snap.guides);
     setSpacingGuides(getSpacingGuides(component, snap.x, snap.y));
-    setGuidePopupId(typeof component.props.popupId === "string" ? component.props.popupId : null);
+    setGuidePopupId(
+      typeof component.props.popupId === "string"
+        ? component.props.popupId
+        : null,
+    );
     window.setTimeout(() => {
       setGuideLines([]);
       setSpacingGuides([]);
       setGuidePopupId(null);
     }, 450);
     recordHistory();
-    if (selectedComponentIds.length > 1 && selectedComponentIds.includes(component.id)) {
+    if (
+      selectedComponentIds.length > 1 &&
+      selectedComponentIds.includes(component.id)
+    ) {
       moveComponents(selectedComponentIds, {
         x: delta.x / getInteractionScale(component),
         y: delta.y / getInteractionScale(component),
@@ -1512,24 +1560,16 @@ export function EditorShell({ project }: EditorShellProps) {
       nextY = component.y + (component.height - nextHeight);
     }
 
-    const snap = getSmartSnap(
-      component,
-      nextX,
-      nextY,
-      nextWidth,
-      nextHeight,
-    );
+    const snap = getSmartSnap(component, nextX, nextY, nextWidth, nextHeight);
     setGuideLines(snap.guides);
     setSpacingGuides(
-      getSpacingGuides(
-        component,
-        snap.x,
-        snap.y,
-        snap.width,
-        snap.height,
-      ),
+      getSpacingGuides(component, snap.x, snap.y, snap.width, snap.height),
     );
-    setGuidePopupId(typeof component.props.popupId === "string" ? component.props.popupId : null);
+    setGuidePopupId(
+      typeof component.props.popupId === "string"
+        ? component.props.popupId
+        : null,
+    );
     updateComponent(component.id, {
       x: snap.x,
       y: snap.y,
@@ -1590,7 +1630,9 @@ export function EditorShell({ project }: EditorShellProps) {
       setPresetsLoaded(true);
     } catch (error) {
       setPresetError(
-        error instanceof Error ? error.message : "프리셋을 불러오지 못했습니다.",
+        error instanceof Error
+          ? error.message
+          : "프리셋을 불러오지 못했습니다.",
       );
     } finally {
       setPresetsLoading(false);
@@ -1643,7 +1685,9 @@ export function EditorShell({ project }: EditorShellProps) {
     }
 
     setPresets((items) =>
-      items.map((item) => (item.id === result.preset!.id ? result.preset! : item)),
+      items.map((item) =>
+        item.id === result.preset!.id ? result.preset! : item,
+      ),
     );
   }
 
@@ -1867,13 +1911,16 @@ export function EditorShell({ project }: EditorShellProps) {
                     </p>
                   ) : presets.length === 0 ? (
                     <p className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
-                      저장된 프리셋이 없습니다. 컴포넌트를 선택한 뒤 Properties에서
-                      프리셋으로 저장해보세요.
+                      저장된 프리셋이 없습니다. 컴포넌트를 선택한 뒤
+                      Properties에서 프리셋으로 저장해보세요.
                     </p>
                   ) : (
                     <div className="divide-y divide-zinc-100">
                       {presets.map((preset) => (
-                        <div key={preset.id} className="flex items-center gap-2 py-1">
+                        <div
+                          key={preset.id}
+                          className="flex items-center gap-2 py-1"
+                        >
                           <button
                             type="button"
                             onClick={() => addPresetToVisibleCenter(preset)}
@@ -2003,11 +2050,11 @@ export function EditorShell({ project }: EditorShellProps) {
           <button
             type="button"
             onClick={() => void shareTemplateUrl()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm"
+            className="inline-flex h-9 w-28 shrink-0 items-center justify-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 text-sm"
           >
             <Share2 className="size-4" />
             {templateShareStatus === "copied"
-              ? "복사됨"
+              ? "링크 복사됨"
               : templateShareStatus === "error"
                 ? "복사 실패"
                 : "템플릿 공유"}
@@ -2103,7 +2150,10 @@ export function EditorShell({ project }: EditorShellProps) {
 
         <main
           ref={scrollAreaRef}
-          className={cn("min-w-0 overflow-auto p-6", isScrollMode && mode === "edit" && "pr-3")}
+          className={cn(
+            "min-w-0 overflow-auto p-6",
+            isScrollMode && mode === "edit" && "pr-3",
+          )}
         >
           <DndContext
             sensors={sensors}
@@ -2116,7 +2166,10 @@ export function EditorShell({ project }: EditorShellProps) {
             }}
           >
             <div
-              className={cn("relative", isScrollMode && mode === "edit" ? "ml-6 mr-auto" : "mx-auto")}
+              className={cn(
+                "relative",
+                isScrollMode && mode === "edit" ? "ml-6 mr-auto" : "mx-auto",
+              )}
               style={{
                 width: 840 * canvasScale,
                 minHeight: canvasHeight * canvasScale,
@@ -2196,14 +2249,18 @@ export function EditorShell({ project }: EditorShellProps) {
                     isSelected={selectedComponentIds.includes(component.id)}
                     isLocked={component.props.locked === true}
                     isCropEditing={activeCropEditingId === component.id}
-                    onSelect={(event) => handleComponentSelect(component.id, event)}
+                    onSelect={(event) =>
+                      handleComponentSelect(component.id, event)
+                    }
                     onDelete={() => {
                       if (component.props.locked === true) {
                         return;
                       }
                       recordHistory();
                       removeComponents(getPopupRelatedIds([component.id]));
-                      setSelectedComponentIds((ids) => ids.filter((id) => id !== component.id));
+                      setSelectedComponentIds((ids) =>
+                        ids.filter((id) => id !== component.id),
+                      );
                     }}
                     onResize={(deltaX, deltaY, direction) =>
                       resizeComponent(component, deltaX, deltaY, direction)
@@ -2233,10 +2290,15 @@ export function EditorShell({ project }: EditorShellProps) {
                   />
                 ))}
                 {!guidePopupId ? (
-                  <GuideOverlay guideLines={guideLines} spacingGuides={spacingGuides} />
+                  <GuideOverlay
+                    guideLines={guideLines}
+                    spacingGuides={spacingGuides}
+                  />
                 ) : null}
                 {lasso ? <LassoOverlay lasso={lasso} /> : null}
-                {insertDraft ? <InsertDraftOverlay draft={insertDraft} /> : null}
+                {insertDraft ? (
+                  <InsertDraftOverlay draft={insertDraft} />
+                ) : null}
               </div>
               {popupComponent ? (
                 <PopupOverlay
@@ -2267,8 +2329,12 @@ export function EditorShell({ project }: EditorShellProps) {
 
                     updateComponent(id, patch);
                   }}
-                  guideLines={guidePopupId === popupComponent.id ? guideLines : []}
-                  spacingGuides={guidePopupId === popupComponent.id ? spacingGuides : []}
+                  guideLines={
+                    guidePopupId === popupComponent.id ? guideLines : []
+                  }
+                  spacingGuides={
+                    guidePopupId === popupComponent.id ? spacingGuides : []
+                  }
                 />
               ) : null}
             </div>
@@ -2331,7 +2397,9 @@ export function EditorShell({ project }: EditorShellProps) {
               }
               recordHistory();
               removeComponents(getPopupRelatedIds([id]));
-              setSelectedComponentIds((ids) => ids.filter((selectedId) => selectedId !== id));
+              setSelectedComponentIds((ids) =>
+                ids.filter((selectedId) => selectedId !== id),
+              );
               selectComponent(null);
             }}
             onOpenPresetSave={setPresetSaveTarget}
@@ -2384,11 +2452,7 @@ function PresetEditDialog({
 }: {
   preset: ComponentPreset;
   onClose: () => void;
-  onSave: (input: {
-    id: string;
-    title: string;
-    memo: string;
-  }) => Promise<void>;
+  onSave: (input: { id: string; title: string; memo: string }) => Promise<void>;
 }) {
   const [title, setTitle] = useState(preset.title);
   const [memo, setMemo] = useState(preset.memo);
@@ -2898,29 +2962,51 @@ function CanvasComponent({
 
     function handlePointerMove(pointerEvent: PointerEvent) {
       const deltaXPercent =
-        ((pointerEvent.clientX - startX) / interactionScale / Math.max(component.width, 1)) * 100;
+        ((pointerEvent.clientX - startX) /
+          interactionScale /
+          Math.max(component.width, 1)) *
+        100;
       const deltaYPercent =
-        ((pointerEvent.clientY - startY) / interactionScale / Math.max(component.height, 1)) * 100;
+        ((pointerEvent.clientY - startY) /
+          interactionScale /
+          Math.max(component.height, 1)) *
+        100;
       const nextCrop = { ...initialCrop };
 
       if (corner.includes("top")) {
         nextCrop.top = Math.round(
-          clamp(initialCrop.top + deltaYPercent, 0, maxCrop - initialCrop.bottom),
+          clamp(
+            initialCrop.top + deltaYPercent,
+            0,
+            maxCrop - initialCrop.bottom,
+          ),
         );
       }
       if (corner.includes("bottom")) {
         nextCrop.bottom = Math.round(
-          clamp(initialCrop.bottom - deltaYPercent, 0, maxCrop - initialCrop.top),
+          clamp(
+            initialCrop.bottom - deltaYPercent,
+            0,
+            maxCrop - initialCrop.top,
+          ),
         );
       }
       if (corner.includes("Left")) {
         nextCrop.left = Math.round(
-          clamp(initialCrop.left + deltaXPercent, 0, maxCrop - initialCrop.right),
+          clamp(
+            initialCrop.left + deltaXPercent,
+            0,
+            maxCrop - initialCrop.right,
+          ),
         );
       }
       if (corner.includes("Right")) {
         nextCrop.right = Math.round(
-          clamp(initialCrop.right - deltaXPercent, 0, maxCrop - initialCrop.left),
+          clamp(
+            initialCrop.right - deltaXPercent,
+            0,
+            maxCrop - initialCrop.left,
+          ),
         );
       }
 
@@ -3003,7 +3089,9 @@ function CanvasComponent({
         <div
           className="flex h-full w-full overflow-visible"
           style={{
-            alignItems: getAlignItemsFromVerticalAlign(component.props.verticalAlign),
+            alignItems: getAlignItemsFromVerticalAlign(
+              component.props.verticalAlign,
+            ),
             padding: RICH_TEXT_COMPONENT_PADDING,
             backgroundColor: String(
               component.props.backgroundColor
@@ -3089,7 +3177,9 @@ function CanvasComponent({
                   />
                 </>
               ) : null}
-              {(["topLeft", "topRight", "bottomLeft", "bottomRight"] as const).map((corner) => (
+              {(
+                ["topLeft", "topRight", "bottomLeft", "bottomRight"] as const
+              ).map((corner) => (
                 <button
                   key={corner}
                   type="button"
@@ -3166,7 +3256,9 @@ function CanvasComponent({
           className="flex h-full w-full border border-zinc-300 bg-white text-sm font-medium text-zinc-900 underline-offset-4"
           style={{
             ...textStyle,
-            alignItems: getAlignItemsFromVerticalAlign(component.props.verticalAlign),
+            alignItems: getAlignItemsFromVerticalAlign(
+              component.props.verticalAlign,
+            ),
             padding: RICH_TEXT_COMPONENT_PADDING,
             borderRadius,
             backgroundColor: String(
@@ -3204,7 +3296,9 @@ function CanvasComponent({
           style={{
             ...textStyle,
             borderRadius,
-            alignItems: getAlignItemsFromVerticalAlign(component.props.verticalAlign),
+            alignItems: getAlignItemsFromVerticalAlign(
+              component.props.verticalAlign,
+            ),
             justifyContent: getJustifyContentFromTextAlign(
               component.props.textAlign,
             ),
@@ -3220,10 +3314,12 @@ function CanvasComponent({
         >
           <span
             className="resume-link-content resume-public-rich-text"
-            style={{
-              "--resume-line-height": `${Number(component.props.lineHeight ?? 150)}%`,
-              "--resume-letter-spacing": `${Number(component.props.letterSpacing ?? 0)}px`,
-            } as CSSProperties}
+            style={
+              {
+                "--resume-line-height": `${Number(component.props.lineHeight ?? 150)}%`,
+                "--resume-letter-spacing": `${Number(component.props.letterSpacing ?? 0)}px`,
+              } as CSSProperties
+            }
             dangerouslySetInnerHTML={{
               __html: sanitizeRichTextHtml(component.content ?? "링크").replace(
                 /<\/?a\b[^>]*>/gi,
@@ -3267,7 +3363,9 @@ function CanvasComponent({
               "px-3 text-sm font-semibold text-zinc-950",
               component.props.thumbnailUrl ? "pt-3" : "pt-4",
             )}
-            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "Popup title") }}
+            dangerouslySetInnerHTML={{
+              __html: sanitizeRichTextHtml(component.content ?? "Popup title"),
+            }}
           />
           <span className="line-clamp-2 px-3 pb-3 pt-1 text-xs leading-5 text-zinc-500">
             {String(
@@ -3307,7 +3405,9 @@ function CanvasComponent({
           className="flex h-full w-full items-start border p-3 text-sm font-medium text-zinc-600"
           id={
             component.type === "section"
-              ? normalizeAnchor(richTextToPlainText(component.content ?? component.id))
+              ? normalizeAnchor(
+                  richTextToPlainText(component.content ?? component.id),
+                )
               : undefined
           }
           style={{
@@ -3322,7 +3422,9 @@ function CanvasComponent({
               component.props.borderStyle ?? "dashed",
             ) as CSSProperties["borderStyle"],
           }}
-          dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(component.content ?? "") }}
+          dangerouslySetInnerHTML={{
+            __html: sanitizeRichTextHtml(component.content ?? ""),
+          }}
         />
       ) : (
         <div
@@ -3520,7 +3622,10 @@ function PopupOverlay({
             />
           ))}
           <div className="pointer-events-none absolute inset-0 z-[140]">
-            <GuideOverlay guideLines={guideLines} spacingGuides={spacingGuides} />
+            <GuideOverlay
+              guideLines={guideLines}
+              spacingGuides={spacingGuides}
+            />
           </div>
         </div>
       </div>
@@ -3824,8 +3929,16 @@ function CanvasBackgroundControl({
       }
 
       updatePoint(id, {
-        x: clamp(((pointerEvent.clientX - rect.left) / rect.width) * 100, 0, 100),
-        y: clamp(((pointerEvent.clientY - rect.top) / rect.height) * 100, 0, 100),
+        x: clamp(
+          ((pointerEvent.clientX - rect.left) / rect.width) * 100,
+          0,
+          100,
+        ),
+        y: clamp(
+          ((pointerEvent.clientY - rect.top) / rect.height) * 100,
+          0,
+          100,
+        ),
       });
     }
 
@@ -4076,15 +4189,22 @@ function PropertyPanel({
     }
   }
 
-  function updateTableSize(component: ResumeComponent, rows: number, cols: number) {
+  function updateTableSize(
+    component: ResumeComponent,
+    rows: number,
+    cols: number,
+  ) {
     const currentData = parseTableData(component);
     const nextRows = clamp(Math.round(rows), 1, 50);
     const nextCols = clamp(Math.round(cols), 1, 20);
 
     if (
-      (nextRows < getTableRows(component) || nextCols < getTableCols(component)) &&
+      (nextRows < getTableRows(component) ||
+        nextCols < getTableCols(component)) &&
       hasTrimmedTableContent(currentData, nextRows, nextCols) &&
-      !window.confirm("행/열 변경으로 기존 셀 내용이 삭제됩니다. 계속 진행할까요?")
+      !window.confirm(
+        "행/열 변경으로 기존 셀 내용이 삭제됩니다. 계속 진행할까요?",
+      )
     ) {
       return;
     }
@@ -4094,9 +4214,17 @@ function PropertyPanel({
         ...component.props,
         tableRows: nextRows,
         tableCols: nextCols,
-        tableData: serializeTableData(resizeTableData(currentData, nextRows, nextCols)),
-        selectedCellRow: Math.min(Number(component.props.selectedCellRow ?? 0), nextRows - 1),
-        selectedCellCol: Math.min(Number(component.props.selectedCellCol ?? 0), nextCols - 1),
+        tableData: serializeTableData(
+          resizeTableData(currentData, nextRows, nextCols),
+        ),
+        selectedCellRow: Math.min(
+          Number(component.props.selectedCellRow ?? 0),
+          nextRows - 1,
+        ),
+        selectedCellCol: Math.min(
+          Number(component.props.selectedCellCol ?? 0),
+          nextCols - 1,
+        ),
       },
     });
   }
@@ -4231,7 +4359,8 @@ function PropertyPanel({
                 onUpdate(selectedComponent.id, {
                   props: {
                     ...selectedComponent.props,
-                    locked: selectedComponent.props.locked === true ? false : true,
+                    locked:
+                      selectedComponent.props.locked === true ? false : true,
                   },
                 })
               }
@@ -4265,7 +4394,8 @@ function PropertyPanel({
               </p>
             </div>
 
-            {selectedComponent.type === "text" || selectedComponent.type === "textbox" ? (
+            {selectedComponent.type === "text" ||
+            selectedComponent.type === "textbox" ? (
               <div className="rounded-md bg-zinc-50 p-3 text-xs leading-5 text-zinc-500">
                 텍스트 내용과 일부 선택 스타일은 캔버스 안에서 직접 수정합니다.
               </div>
@@ -4578,7 +4708,11 @@ function PropertyPanel({
                       )}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={icon.src} alt="" className="size-7 object-contain" />
+                      <img
+                        src={icon.src}
+                        alt=""
+                        className="size-7 object-contain"
+                      />
                       <span>{icon.label}</span>
                     </button>
                   ))}
@@ -4626,7 +4760,9 @@ function PropertyPanel({
                 <label className="grid min-w-0 gap-1">
                   <span className="text-zinc-500">Fit</span>
                   <select
-                    value={String(selectedComponent.props.objectFit ?? "contain")}
+                    value={String(
+                      selectedComponent.props.objectFit ?? "contain",
+                    )}
                     onChange={(event) =>
                       onUpdate(selectedComponent.id, {
                         props: {
@@ -4652,7 +4788,9 @@ function PropertyPanel({
                         : "border-zinc-200 text-zinc-700 hover:bg-zinc-50",
                     )}
                   >
-                    {isImageCropEditing ? "이미지 자르기 종료" : "이미지 자르기"}
+                    {isImageCropEditing
+                      ? "이미지 자르기 종료"
+                      : "이미지 자르기"}
                   </button>
                 ) : null}
               </div>
@@ -4734,10 +4872,17 @@ function PropertyPanel({
                   Typography
                 </summary>
                 <div className="mt-3 grid gap-3">
-                  <div className={cn("grid gap-2", selectedComponent.type !== "icon" && "grid-cols-2")}>
+                  <div
+                    className={cn(
+                      "grid gap-2",
+                      selectedComponent.type !== "icon" && "grid-cols-2",
+                    )}
+                  >
                     <label className="grid gap-1">
                       <span className="text-zinc-500">
-                        {selectedComponent.type === "icon" ? "Icon Color" : "Text Color"}
+                        {selectedComponent.type === "icon"
+                          ? "Icon Color"
+                          : "Text Color"}
                       </span>
                       <input
                         type="color"
@@ -4873,7 +5018,9 @@ function PropertyPanel({
                       <div className="grid grid-cols-2 gap-2">
                         <NumberField
                           label="Line Height (%)"
-                          value={Number(selectedComponent.props.lineHeight ?? 150)}
+                          value={Number(
+                            selectedComponent.props.lineHeight ?? 150,
+                          )}
                           min={80}
                           max={300}
                           onChange={(value) =>
@@ -4896,7 +5043,9 @@ function PropertyPanel({
                         />
                         <NumberField
                           label="Letter Spacing (px)"
-                          value={Number(selectedComponent.props.letterSpacing ?? 0)}
+                          value={Number(
+                            selectedComponent.props.letterSpacing ?? 0,
+                          )}
                           min={-5}
                           max={30}
                           onChange={(value) =>
@@ -4949,7 +5098,9 @@ function PropertyPanel({
                   <label className="grid min-w-0 gap-1">
                     <span className="text-zinc-500">Direction</span>
                     <select
-                      value={String(selectedComponent.props.orientation ?? "horizontal")}
+                      value={String(
+                        selectedComponent.props.orientation ?? "horizontal",
+                      )}
                       onChange={(event) =>
                         onUpdate(selectedComponent.id, {
                           props: {
@@ -4967,7 +5118,9 @@ function PropertyPanel({
                   <label className="grid min-w-0 gap-1">
                     <span className="text-zinc-500">Line Style</span>
                     <select
-                      value={String(selectedComponent.props.lineStyle ?? "solid")}
+                      value={String(
+                        selectedComponent.props.lineStyle ?? "solid",
+                      )}
                       onChange={(event) =>
                         onUpdate(selectedComponent.id, {
                           props: {
@@ -4985,7 +5138,9 @@ function PropertyPanel({
                   <label className="grid min-w-0 gap-1">
                     <span className="text-zinc-500">Thickness</span>
                     <select
-                      value={String(selectedComponent.props.thickness ?? "thin")}
+                      value={String(
+                        selectedComponent.props.thickness ?? "thin",
+                      )}
                       onChange={(event) =>
                         onUpdate(selectedComponent.id, {
                           props: {
@@ -5013,8 +5168,7 @@ function PropertyPanel({
                     props: {
                       ...selectedComponent.props,
                       backgroundColor:
-                        selectedComponent.props.backgroundColor ??
-                        "#ffffff",
+                        selectedComponent.props.backgroundColor ?? "#ffffff",
                       backgroundOpacity: clamp(value, 0, 100),
                     },
                   })

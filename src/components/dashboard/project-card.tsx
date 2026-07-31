@@ -241,7 +241,7 @@ export function ProjectCard({
           <Link
             href={`/editor/${project.id}`}
             onClick={handleEditorOpen}
-            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800"
+            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-700"
           >
             <FilePenLine className="size-4" />
             수정
@@ -257,11 +257,11 @@ export function ProjectCard({
         <button
           type="button"
           onClick={() => void copyTemplateShareUrl()}
-          className="inline-flex w-32 items-center justify-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-[#eeeeef]"
+          className="inline-flex w-32 shrink-0 items-center justify-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-[#eeeeef]"
         >
           <Share2 className="size-4" />
           {templateShareStatus === "copied"
-            ? "복사됨"
+            ? "링크 복사됨"
             : templateShareStatus === "error"
               ? "복사 실패"
               : "템플릿 공유"}
