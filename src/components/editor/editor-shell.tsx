@@ -2042,7 +2042,7 @@ export function EditorShell({ project }: EditorShellProps) {
           >
             <Link2 className="size-4" />
             {shareStatus === "copied"
-              ? "복사됨"
+              ? "링크 복사됨"
               : shareStatus === "error"
                 ? "복사 실패"
                 : "URL 공유"}
