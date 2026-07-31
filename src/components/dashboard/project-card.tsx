@@ -1,6 +1,6 @@
 "use client";
 
-import type { FormEvent } from "react";
+import type { FormEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useState } from "react";
 import Link from "next/link";
 import {
@@ -48,6 +48,7 @@ export function ProjectCard({
   const [templateShareStatus, setTemplateShareStatus] = useState<
     "idle" | "copied" | "error"
   >("idle");
+  const [isOpeningEditor, setIsOpeningEditor] = useState(false);
 
   function getAvailableTitle(value: string) {
     const baseTitle = value.trim();
@@ -110,12 +111,55 @@ export function ProjectCard({
     }
   }
 
+  function handleEditorOpen(event: ReactMouseEvent<HTMLAnchorElement>) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    setIsOpeningEditor(true);
+  }
+
   if (isDeleted) {
     return null;
   }
 
   return (
     <article className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+      {isOpeningEditor ? (
+        <div className="fixed inset-0 z-[200] grid place-items-center bg-white/70 backdrop-blur-sm">
+          <div className="w-[min(420px,calc(100vw-32px))] overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-2xl">
+            <div className="flex items-center gap-3 border-b border-zinc-100 px-5 py-4">
+              <span className="size-5 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-950" />
+              <div>
+                <p className="text-sm font-semibold text-zinc-950">
+                  편집화면으로 이동 중
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  프로젝트 데이터를 불러오고 있습니다.
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-3 p-5">
+              <div className="h-8 w-2/3 animate-pulse rounded-md bg-zinc-200" />
+              <div className="grid grid-cols-[88px_1fr] gap-3">
+                <div className="h-28 animate-pulse rounded-md bg-zinc-100" />
+                <div className="grid gap-2">
+                  <div className="h-5 animate-pulse rounded bg-zinc-100" />
+                  <div className="h-5 animate-pulse rounded bg-zinc-100" />
+                  <div className="h-5 w-4/5 animate-pulse rounded bg-zinc-100" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <form
@@ -134,7 +178,7 @@ export function ProjectCard({
             <button
               type="submit"
               disabled={!canEdit}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 hover:bg-[#eeeeef] group-focus-within/title:bg-[#eeeeef] disabled:cursor-not-allowed disabled:text-zinc-300"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:bg-[#eeeeef] group-focus-within/title:bg-[#eeeeef] disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:border-zinc-200 disabled:hover:bg-transparent"
               title="프로젝트 이름 저장"
             >
               <Pencil className="size-4" />
@@ -155,7 +199,7 @@ export function ProjectCard({
             <button
               type="submit"
               disabled={!canEdit}
-              className="h-8 rounded-md border border-zinc-200 px-2 text-xs font-medium text-zinc-600 disabled:cursor-not-allowed disabled:text-zinc-300"
+              className="h-8 rounded-md border border-zinc-200 px-2 text-xs font-medium text-zinc-600 transition hover:border-zinc-300 hover:bg-[#eeeeef] disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:border-zinc-200 disabled:hover:bg-transparent"
             >
               URL 저장
             </button>
@@ -196,7 +240,8 @@ export function ProjectCard({
         {canEdit ? (
           <Link
             href={`/editor/${project.id}`}
-            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white"
+            onClick={handleEditorOpen}
+            className="inline-flex items-center gap-1.5 rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800"
           >
             <FilePenLine className="size-4" />
             수정
@@ -204,7 +249,7 @@ export function ProjectCard({
         ) : null}
         <Link
           href={`/${project.slug}`}
-          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700"
+          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-[#eeeeef]"
         >
           <ExternalLink className="size-4" />
           열기
@@ -212,11 +257,11 @@ export function ProjectCard({
         <button
           type="button"
           onClick={() => void copyTemplateShareUrl()}
-          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700"
+          className="inline-flex w-32 items-center justify-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-[#eeeeef]"
         >
           <Share2 className="size-4" />
           {templateShareStatus === "copied"
-            ? "템플릿 링크 복사됨"
+            ? "복사됨"
             : templateShareStatus === "error"
               ? "복사 실패"
               : "템플릿 공유"}
@@ -225,7 +270,7 @@ export function ProjectCard({
           <input type="hidden" name="projectId" value={project.id} />
           <button
             disabled={!canEdit || !canCreate}
-            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 disabled:cursor-not-allowed disabled:text-zinc-300"
+            className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-[#eeeeef] disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:border-zinc-200 disabled:hover:bg-transparent"
           >
             <Copy className="size-4" />
             복제
@@ -247,7 +292,7 @@ export function ProjectCard({
           <button
             type="submit"
             disabled={!canEdit}
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:text-zinc-300"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 transition hover:border-zinc-300 hover:bg-[#eeeeef] disabled:cursor-not-allowed disabled:text-zinc-300 disabled:hover:border-zinc-200 disabled:hover:bg-transparent"
             title="메모 저장"
           >
             <StickyNote className="size-4" />
