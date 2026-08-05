@@ -13,14 +13,7 @@ export function getBrowserSiteOrigin() {
     return getConfiguredSiteUrl() ?? "";
   }
 
-  if (
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1"
-  ) {
-    return window.location.origin;
-  }
-
-  return getConfiguredSiteUrl() ?? window.location.origin;
+  return window.location.origin;
 }
 
 export function getCurrentBrowserOrigin() {

@@ -5,7 +5,13 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 import { getAuthCallbackUrl } from "@/lib/utils/site-url";
 
-export function OAuthButtons({ className }: { className?: string }) {
+export function OAuthButtons({
+  className,
+  next = "/dashboard",
+}: {
+  className?: string;
+  next?: string;
+}) {
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,7 +24,7 @@ export function OAuthButtons({ className }: { className?: string }) {
       const { error: signInError } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: getAuthCallbackUrl("/dashboard"),
+          redirectTo: getAuthCallbackUrl(next),
         },
       });
 

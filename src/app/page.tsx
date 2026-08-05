@@ -4,8 +4,16 @@ import { OAuthButtons } from "@/components/auth/oauth-buttons";
 import { TopNav } from "@/components/layout/top-nav";
 import { getCurrentUser } from "@/server/projects";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const { next } = await searchParams;
   const user = await getCurrentUser();
+  const loginNext =
+    typeof next === "string" && next.startsWith("/") ? next : "/dashboard";
+
   return (
     <div className="min-h-screen bg-[#f7f5f0] text-zinc-950 ">
       <TopNav />
@@ -77,7 +85,7 @@ export default async function Home() {
           </div>
           {!user && (
             <div className="mt-4">
-              <OAuthButtons />
+              <OAuthButtons next={loginNext} />
             </div>
           )}
         </section>

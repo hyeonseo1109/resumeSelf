@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PublicProjectRenderer } from "@/components/site/public-project-renderer";
+import { TemplateUseForm } from "@/components/site/template-use-form";
 import { getCurrentUser, getPublicProjectBySlug } from "@/server/projects";
 import { useSharedTemplateAction } from "./actions";
 
@@ -55,16 +56,14 @@ export default async function SharedTemplatePage({
               </p>
             ) : null}
             {user ? (
-              <form action={useSharedTemplateAction}>
-                <input type="hidden" name="slug" value={project.slug} />
-                <button className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white">
-                  내 프로젝트로 사용
-                </button>
-              </form>
+              <TemplateUseForm
+                action={useSharedTemplateAction}
+                slug={project.slug}
+              />
             ) : (
               <Link
-                href="/"
-                className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white"
+                href={`/?next=${encodeURIComponent(`/templates/${project.slug}`)}`}
+                className="inline-flex h-10 w-40 items-center justify-center rounded-md bg-zinc-950 px-3 text-sm font-medium text-white transition hover:bg-zinc-800"
               >
                 로그인하고 사용
               </Link>
